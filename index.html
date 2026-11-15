@@ -141,7 +141,7 @@
   <div id="pbody"></div>
 </div>
 <div id="world"><canvas id="globe"></canvas><div class="wtop"><span id="wstats"></span><button class="btn sm ghost" data-act="worldClose">✕ Close globe</button></div><div id="wtip"></div>
-  <div class="wlegend"><span style="color:#ff3cac">●</span> You &nbsp; <span style="color:#ffe066">●</span> You stake with them &nbsp; <span style="color:#ff3355">●</span> Slashed &nbsp; <span style="color:#7a3a4a">●</span> Offline<br>Pin colour = guild · height = validators · white ripples = blocks · drag to spin, click a pin</div></div>
+  <div class="wlegend"><span style="color:#ff3cac">●</span> You &nbsp; <span style="color:#ffe066">●</span> You stake with them &nbsp; <span style="color:#ff3355">●</span> Slashed &nbsp; <span style="color:#7a3a4a">●</span> Offline<br>Pin color = guild · height = validators · white ripples = blocks · drag to spin, click a pin</div></div>
 <div id="modal"><div class="box" id="mbox"></div></div>
 
 <script type="module">
@@ -180,7 +180,7 @@ const INFRA = {
   ups:       { name:'UPS Battery Bank',  cost:300_000,   desc:'Covers grid outages and bridges the gap while the generator starts. Recharges when the grid is back.' },
   generator: { name:'Diesel Generator',  cost:1_500_000, desc:'Runs your room through any outage. Burns 150 coins of fuel per node per block. Takes 5 blocks to start unless you add a transfer switch.' },
   solar:     { name:'Solar Array',       cost:6_000_000, desc:'In daytime: no grid electricity bill and half the generator fuel.' },
-  backup4g:  { name:'4G Backup Router',  cost:500_000,   desc:'Keeps you online when the fibre is cut. Patchy: 5% of blocks drop.' },
+  backup4g:  { name:'4G Backup Router',  cost:500_000,   desc:'Keeps you online when the fiber is cut. Patchy: 5% of blocks drop.' },
   satellite: { name:'Satellite Link',    cost:4_000_000, desc:'Rock-solid backup internet. Costs 20 per node per block while in use.' },
 };
 // Real server-room infrastructure (one-off purchases)
@@ -205,7 +205,7 @@ const FARM_TIERS = [
 const MAX_FARMS = 5;
 // Cosmetics — kept across Hard Forks
 const DECOR = {
-  floor:  { label:'Floor', items:[['tiles','Dark tiles',0],['raised','Data-centre white',300_000],['epoxy','Grey epoxy',300_000],['wood','Oak planks',400_000],['carbon','Carbon fibre',600_000],['hex','Neon hex',800_000]] },
+  floor:  { label:'Floor', items:[['tiles','Dark tiles',0],['raised','Data-center white',300_000],['epoxy','Gray epoxy',300_000],['wood','Oak planks',400_000],['carbon','Carbon fiber',600_000],['hex','Neon hex',800_000]] },
   wall:   { label:'Walls', items:[['violet','Violet',0,0x3b3550],['slate','Slate',100_000,0x34404f],['white','Clean white',100_000,0xcfd4dd],['charcoal','Charcoal',100_000,0x232428],['forest','Forest green',150_000,0x2e4a3c],['navy','Navy',150_000,0x1f2a4a],['terracotta','Terracotta',150_000,0x7a3e2a],['plum','Plum',200_000,0x5a2147]] },
   accent: { label:'Accent light', items:[['pink','Pink',0,0xff3cac],['cyan','Cyan',150_000,0x2bd4ff],['lime','Lime',150_000,0x9bff3c],['gold','Gold',150_000,0xffc83d],['white','White',150_000,0xffffff],['rainbow','Rainbow cycle',2_000_000,null]] },
   rack:   { label:'Rack paint', items:[['default','Factory finish',0,null],['white','Arctic white',500_000,0xdfe3ea],['black','Matte black',500_000,0x101114],['purple','Royal purple',800_000,0x4b2a7a],['teal','Teal',800_000,0x13595e],['gold','Gold',3_000_000,0x8a6d1d]] },
@@ -312,10 +312,10 @@ function award(id){ if (S.badges[id]) return; S.badges[id] = true; const b = BAD
    EVENTS
    ========================================================= */
 const EVENTS = [
-  { id:'outage', w:3, ok:()=>true, start(){ const d=randi(20,60); S.ev.outage={until:S.block+d, dark:false, start:S.block}; log('⚡ Grid outage! The light is gone.', 'bad');
+  { id:'outage', w:3, ok:()=>true, start(){ const d=randi(20,60); S.ev.outage={until:S.block+d, dark:false, start:S.block}; log('⚡ Grid outage! The power is out.', 'bad');
       if (!S.fac.pdu && (S.ups || S.generator)){ let n = 0; S.nodes.forEach((x,i) => { if (x.status === 'ok' && Math.random() < 0.12){ x.status = 'broken'; n++; fx.spark(i); } });
         if (n) log(`⚡ The switch to backup power crashed ${n} node${n>1?'s':''}. Dual power feeds (A+B PDUs) prevent this.`, 'bad'); } } },
-  { id:'fibre', w:2, ok:()=>true, start(){ S.ev.fibre={until:S.block+randi(30,80)}; log('✂️ Fibre cut on the main road. Internet is down.', 'bad'); } },
+  { id:'fibre', w:2, ok:()=>true, start(){ S.ev.fibre={until:S.block+randi(30,80)}; log('✂️ Fiber line cut down the street. Internet is down.', 'bad'); } },
   { id:'mania', w:2, ok:()=>true, start(){ S.ev.mania={until:S.block+45}; log('🐸 Meme-coin mania! Network fees ×3.', 'good'); } },
   { id:'scare', w:1.5, ok:()=>S.deleg>0, start(){ const p = S.rep>80?0.05:0.15; const lost = S.deleg*p; S.deleg -= lost; S.ev.scare={until:S.block+10}; log(`🌉 Bridge exploit scare: stakers pulled ${fmt(lost)}.`, 'bad'); } },
   { id:'upgrade', w:1, ok:()=>S.nodes.length>=2 && !S.ev.upgrade && !S.outOfSync, start(){ S.ev.upgrade={until:S.block+60, deadline:S.block+60, start:S.block}; log('🛠️ Network upgrade! Patch your nodes within 60 blocks.', 'warn'); } },
@@ -374,7 +374,7 @@ function tick(){
 
   // outage bookkeeping
   if (S.ev.outage && S.block >= S.ev.outage.until){ if (!S.ev.outage.dark){ S.stats.outagesSurvived++; log('💡 Grid is back. You stayed powered the whole time.', 'good'); } else log('💡 Grid is back.'); delete S.ev.outage; }
-  if (S.ev.fibre && S.block >= S.ev.fibre.until){ delete S.ev.fibre; log('🌐 Fibre repaired.'); }
+  if (S.ev.fibre && S.block >= S.ev.fibre.until){ delete S.ev.fibre; log('🌐 Fiber repaired.'); }
   for (const id of ['mania','bear','heat','scare','ddos']) if (S.ev[id] && S.block >= S.ev[id].until) delete S.ev[id];
   if (S.pendingWhale && S.block >= S.pendingWhale.expires){ delete S.pendingWhale; closeModal(); log('🐋 The whale got tired of waiting.'); }
 
@@ -653,11 +653,12 @@ function showHelp(){
   showModal(`<h2>How to play</h2>
   <p>You run a staking company. A validator switches on for every <b>32M coins</b> of stake you have, and each one needs a node (a computer) to run on.</p>
   <p><b>1.</b> Stake your own coins in the Staking tab. <b>2.</b> Stakers lend you more stake, depending on your reputation, marketing and commission. <b>3.</b> Online validators earn every block, and occasionally propose one for bonus fees. <b>4.</b> Reinvest: nodes, cooling, backup power and internet, technicians.</p>
-  <p>Watch out for outages, fibre cuts, overheating and network upgrades. "Hot backup" keeps a node validating while broken, but it can double-sign and get you <b>slashed</b>.</p>
-  <p>Upgrade your room like a real data centre (raised floor, aisle containment, fire suppression, security) and open <b>server farms</b> in other cities in the Build tab. Make it yours in the <b>Design</b> tab.</p>
+  <p>Watch out for outages, fiber cuts, overheating and network upgrades. "Hot backup" keeps a node validating while broken, but it can double-sign and get you <b>slashed</b>.</p>
+  <p>Upgrade your room like a real data center (raised floor, aisle containment, fire suppression, security) and open <b>server farms</b> in other cities in the Build tab. Make it yours in the <b>Design</b> tab.</p>
   <p>In the <b>Network</b> tab, put your company on the world map, stake spare coins with other companies, or join a <b>guild</b>: members pool stake, and every 32M pooled runs a shared validator.</p>
   <p>Earn 1B lifetime to <b>Hard Fork</b>: restart with permanent bonuses. Drag to pan, scroll or pinch to zoom, click a rack to manage it.</p>
-  <div class="btns"><button class="btn" data-act="closeModal">Start validating</button></div>`);
+  <div class="btns"><button class="btn" data-act="closeModal">Start validating</button></div>
+  <p class="note" style="margin-top:12px">All coins and items are fictional and have no real-world value. <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a></p>`);
 }
 
 /* =========================================================
@@ -666,22 +667,28 @@ function showHelp(){
    NET, so switching to real players (Supabase) only means replacing NET's internals.
    ========================================================= */
 const CITIES = [
-  ['Port Harcourt','NG',4.82,7.03],['Lagos','NG',6.52,3.38],['Abuja','NG',9.06,7.49],['Kano','NG',12.0,8.52],['Benin City','NG',6.34,5.63],['Warri','NG',5.52,5.75],
-  ['Accra','GH',5.6,-0.19],['Nairobi','KE',-1.29,36.82],['Johannesburg','ZA',-26.2,28.05],['Cairo','EG',30.04,31.24],['Kigali','RW',-1.95,30.06],['Casablanca','MA',33.57,-7.59],
-  ['London','GB',51.51,-0.13],['Paris','FR',48.86,2.35],['Berlin','DE',52.52,13.4],['Amsterdam','NL',52.37,4.9],['Helsinki','FI',60.17,24.94],['Zurich','CH',47.37,8.54],
-  ['Lisbon','PT',38.72,-9.14],['Warsaw','PL',52.23,21.01],['Kyiv','UA',50.45,30.52],['Istanbul','TR',41.01,28.98],['Dubai','AE',25.2,55.27],['Mumbai','IN',19.08,72.88],
-  ['Bangalore','IN',12.97,77.59],['Singapore','SG',1.35,103.82],['Hong Kong','HK',22.32,114.17],['Tokyo','JP',35.68,139.69],['Seoul','KR',37.57,126.98],['Manila','PH',14.6,120.98],
-  ['Jakarta','ID',-6.21,106.85],['Sydney','AU',-33.87,151.21],['Auckland','NZ',-36.85,174.76],['New York','US',40.71,-74.01],['Miami','US',25.76,-80.19],['Austin','US',30.27,-97.74],
-  ['San Francisco','US',37.77,-122.42],['Toronto','CA',43.65,-79.38],['Vancouver','CA',49.28,-123.12],['Mexico City','MX',19.43,-99.13],['Bogotá','CO',4.71,-74.07],['Kingston','JM',18.0,-76.8],
-  ['São Paulo','BR',-23.55,-46.63],['Buenos Aires','AR',-34.6,-58.38],['Lima','PE',-12.05,-77.04],['Santiago','CL',-33.45,-70.67],
-];
+  ['Accra','GH',5.6,-0.19],['Amsterdam','NL',52.37,4.9],['Atlanta','US',33.75,-84.39],['Auckland','NZ',-36.85,174.76],['Austin','US',30.27,-97.74],
+  ['Bangalore','IN',12.97,77.59],['Berlin','DE',52.52,13.4],['Bogotá','CO',4.71,-74.07],['Boston','US',42.36,-71.06],['Buenos Aires','AR',-34.6,-58.38],
+  ['Cairo','EG',30.04,31.24],['Casablanca','MA',33.57,-7.59],['Chicago','US',41.88,-87.63],['Dallas','US',32.78,-96.8],['Denver','US',39.74,-104.99],
+  ['Dubai','AE',25.2,55.27],['Helsinki','FI',60.17,24.94],['Hong Kong','HK',22.32,114.17],['Istanbul','TR',41.01,28.98],['Jakarta','ID',-6.21,106.85],
+  ['Johannesburg','ZA',-26.2,28.05],['Kigali','RW',-1.95,30.06],['Kingston','JM',18.0,-76.8],['Kyiv','UA',50.45,30.52],['Lagos','NG',6.52,3.38],
+  ['Las Vegas','US',36.17,-115.14],['Lima','PE',-12.05,-77.04],['Lisbon','PT',38.72,-9.14],['London','GB',51.51,-0.13],['Los Angeles','US',34.05,-118.24],
+  ['Manila','PH',14.6,120.98],['Mexico City','MX',19.43,-99.13],['Miami','US',25.76,-80.19],['Mumbai','IN',19.08,72.88],['Nairobi','KE',-1.29,36.82],
+  ['New York','US',40.71,-74.01],['Paris','FR',48.86,2.35],['Phoenix','US',33.45,-112.07],['San Francisco','US',37.77,-122.42],['Santiago','CL',-33.45,-70.67],
+  ['São Paulo','BR',-23.55,-46.63],['Seattle','US',47.61,-122.33],['Seoul','KR',37.57,126.98],['Singapore','SG',1.35,103.82],['Sydney','AU',-33.87,151.21],
+  ['Tokyo','JP',35.68,139.69],['Toronto','CA',43.65,-79.38],['Vancouver','CA',49.28,-123.12],['Warsaw','PL',52.23,21.01],['Washington DC','US',38.91,-77.04],
+  ['Zurich','CH',47.37,8.54],
+].sort((a, b) => a[0].localeCompare(b[0], 'en', { sensitivity:'base' }));
+// cities removed in Nov 2026 -> where existing saves move to
+const CITY_MOVES = { 'Port Harcourt':'Lagos', 'Abuja':'Lagos', 'Kano':'Lagos', 'Benin City':'Lagos', 'Warri':'Lagos' };
 const FLAGS = c => String.fromCodePoint(...[...c].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 65));
 const CO_SUFFIX = ['Stake Labs','Node Works','Validators','Staking Co.','Block Collective','Uptime Partners','Hash House','Chain Ops','Beacon Group','Node Guild','Validator Hub','Stake Foundry'];
 const GUILD_DEFS = [
-  ['Lagos Liquidity League',0xff3cac],['Nordic Nodes Alliance',0x5bc0ff],['Pacific Stake Syndicate',0x3cf29a],['Sahara Uptime Union',0xffb340],['Andes Validator Guild',0xb57bff],
-  ['Atlantic Bridge Co-op',0x2bd4c5],['Silk Road Stakers',0xff7a59],['Garden City Collective',0x9be15d],['Midnight Hash Club',0x8f9bff],['Equator Node Federation',0xffe066],
+  ['Liberty Liquidity League',0xff3cac],['Nordic Nodes Alliance',0x5bc0ff],['Pacific Stake Syndicate',0x3cf29a],['Mojave Uptime Union',0xffb340],['Andes Validator Guild',0xb57bff],
+  ['Atlantic Bridge Co-op',0x2bd4c5],['Silk Road Stakers',0xff7a59],['Golden Gate Collective',0x9be15d],['Midnight Hash Club',0x8f9bff],['Equator Node Federation',0xffe066],
 ];
-const STARTERS = [['Garden City Nodes','Port Harcourt',8e6],['Bonny Light Validators','Port Harcourt',25e6],['Harmattan Stake House','Kano',80e6],['Delta Uptime Ltd','Warri',250e6],['Atlantic 369 Infra','Lagos',900e6]];
+const STARTERS = [['Brooklyn Node Works','New York',8e6],['Bay Area Validators','San Francisco',25e6],['Lone Star Stake House','Austin',80e6],['Biscayne Uptime LLC','Miami',250e6],['Atlantic 369 Infra','Boston',900e6]];
+const RENAMES = { 'Garden City Nodes':['Brooklyn Node Works','New York'], 'Bonny Light Validators':['Bay Area Validators','San Francisco'], 'Harmattan Stake House':['Lone Star Stake House','Austin'], 'Delta Uptime Ltd':['Biscayne Uptime LLC','Miami'] };
 const UNIT_RATE = BASE_RATE + PROPOSE_CHANCE*PROPOSE_FEE*(1-BURN_SHARE);   // average reward per staked coin per block
 const GUILD_FOUND_COST = 5_000_000;
 const DELEGATE_EFF = 0.6;   // staking with someone else earns less than running your own validator
@@ -859,7 +866,8 @@ function showAuth(msg = ''){
     <div class="btns"><button class="btn" data-act="authIn">Sign in</button><button class="btn ghost" data-act="authUp">Create account</button></div>
     <div class="btns" style="margin-top:10px"><button class="btn ghost" data-act="authGuest">Play as guest</button><button class="btn ghost" data-act="authOffline">Play offline</button></div>
     <p id="au_msg" style="color:${msg.startsWith('✓')?'var(--good)':'var(--bad)'};min-height:1em">${esc(msg)}</p>
-    <p class="note">Guests can add an email later in the Company tab to keep their progress.</p>`);
+    <p class="note">Guests can add an email later in the Company tab to keep their progress.</p>
+    <p class="note">By playing online you agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>`);
 }
 const authVals = () => ({ email:(document.getElementById('au_email')?.value || '').trim(), password:document.getElementById('au_pass')?.value || '' });
 const authMsg = m => { const el = document.getElementById('au_msg'); if (el){ el.textContent = m; el.style.color = m.startsWith('✓') ? 'var(--good)' : 'var(--bad)'; } };
@@ -978,7 +986,7 @@ function chips(){
   const c = [];
   const left = id => S.ev[id].until - S.block;
   if (active('outage')) c.push(['bad', `⚡ Grid outage — running on ${rt.powerSrc==='ups'?'UPS':rt.powerSrc==='gen'?'generator':'NOTHING'}`, left('outage')]);
-  if (active('fibre')) c.push(['bad', `✂️ Fibre cut — ${rt.net==='sat'?'on satellite':rt.net==='4g'?'on 4G backup':'OFFLINE'}`, left('fibre')]);
+  if (active('fibre')) c.push(['bad', `✂️ Fiber cut — ${rt.net==='sat'?'on satellite':rt.net==='4g'?'on 4G backup':'OFFLINE'}`, left('fibre')]);
   if (active('mania')) c.push(['good', '🐸 Meme-coin mania: fees ×3', left('mania')]);
   if (active('bear')) c.push(['', '🐻 Bear market: nodes 50% off', left('bear')]);
   if (active('heat')) c.push(['', '🔥 Heatwave: cooling −30%', left('heat')]);
@@ -1076,13 +1084,13 @@ function infraCard(key){
 }
 function tabPower(){
   const srcName = {grid:'Grid', ups:'UPS battery', gen:'Generator', none:'NO POWER'}[rt.powerSrc];
-  const netName = {fibre:'Fibre', '4g':'4G backup', sat:'Satellite', none:'OFFLINE'}[rt.net];
+  const netName = {fibre:'Fiber', '4g':'4G backup', sat:'Satellite', none:'OFFLINE'}[rt.net];
   return `<div class="sec"><h3>Power</h3>
     <div class="card"><div class="kv"><span>Source now</span><span style="color:${rt.powered?'var(--good)':'var(--bad)'}">${srcName}</span></div>
     <div class="kv"><span>Time of day</span><span>${rt.day?'☀️ Day':'🌙 Night'}</span></div>
     <div class="kv"><span>Running costs</span><span>${fmt(rt.cost)}/block</span></div></div>
     ${infraCard('ups')}${infraCard('generator')}${facCard('ats')}${facCard('pdu')}${infraCard('solar')}</div>
-    <div class="sec"><h3>Internet</h3><div class="card"><div class="kv"><span>Connection now</span><span style="color:${rt.netOk?'var(--good)':'var(--bad)'}">${netName}</span></div><div class="desc">Fibre is included. Backups only kick in when it's cut.</div></div>
+    <div class="sec"><h3>Internet</h3><div class="card"><div class="kv"><span>Connection now</span><span style="color:${rt.netOk?'var(--good)':'var(--bad)'}">${netName}</span></div><div class="desc">Fiber is included. Backups only kick in when it's cut.</div></div>
     ${infraCard('backup4g')}${infraCard('satellite')}${facCard('ddos')}</div>`;
 }
 function tabStake(){
@@ -1125,6 +1133,7 @@ function accountSection(){
   if (online.user){
     const guest = online.user.is_anonymous;
     body = `<div class="kv"><span>Signed in as</span><span>${guest ? 'Guest' : esc(online.user.email || '')}</span></div>
+      <div class="kv"><span>Player ID</span><span style="font-size:11px">${esc(online.user.id.slice(0,8))}…</span></div>
       <div class="kv"><span>Cloud</span><span style="color:${online.status==='online'?'var(--good)':'var(--bad)'}">${online.status === 'online' ? 'Synced every 30s' : esc(online.err || online.status)}</span></div>
       ${guest ? `<div class="desc" style="margin-top:6px">Add an email so you never lose this company:</div><input type="email" id="lk_email" data-input="lk" placeholder="Email" style="margin-top:4px"><input type="password" id="lk_pass" data-input="lk" placeholder="Password (6+)" style="margin-top:4px"><div class="btns"><button class="btn sm" data-act="authLink">Save account</button></div>` : ''}
       <div class="btns"><button class="btn sm ghost" data-act="syncNow">Sync now</button><button class="btn sm ghost" data-act="authOut">Sign out</button></div>`;
@@ -1155,7 +1164,8 @@ function tabCompany(){
   <div class="note" style="margin-top:6px">In the blockchain version, badges become soulbound tokens on PulseChain and season prizes are paid from an on-chain pool. Those contracts are written but not live yet.</div></div>
   <div class="sec"><h3>Live chain</h3><div class="card"><div class="desc">${chain.live?`Connected to PulseChain: real block #${chain.block.toLocaleString()}. Each new real block gives +10% rewards for 5 blocks.`:'Running on a simulated chain. When hosted somewhere that allows network calls, the game reads real PulseChain blocks and gives a live bonus.'}</div></div></div>
   <div class="sec"><h3>Settings</h3><div class="btns"><button class="btn sm ghost" data-act="lowgfx">Low graphics: ${S.lowGfx?'ON':'off'}</button><button class="btn sm ghost" data-act="help">How to play</button><button class="btn sm danger" data-act="reset">Reset save</button></div>
-  <div class="note" style="margin-top:6px">Progress saves in this browser only. Offline earnings run at 50% for up to 8 hours.</div></div>`;
+  <div class="note" style="margin-top:6px">Offline earnings run at 50% for up to 8 hours.</div></div>
+  <div class="sec"><h3>Legal</h3><div class="note">Validator Tycoon is a simulation: coins and items are fictional, have no real-world value, and nothing here is financial advice. Not affiliated with PulseChain.<br><a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a></div></div>`;
 }
 function companyCard(c){
   const g = c.guild && guild(c.guild), mine = S.dels[c.id] || 0, per1m = 1e6*UNIT_RATE*DELEGATE_EFF*(1-c.comm);
@@ -1539,7 +1549,7 @@ const scene3 = (() => {
     const gr = g.createLinearGradient(0,0,512,0); gr.addColorStop(0,'#ff3cac'); gr.addColorStop(.5,'#784ba0'); gr.addColorStop(1,'#2b86c5'); g.fillStyle = gr; g.fillRect(0,0,512,8); g.fillRect(0,120,512,8);
     g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
     let fs = 54; g.font = `bold ${fs}px sans-serif`; const txt = S.company.toUpperCase(); while (g.measureText(txt).width > 480 && fs > 20){ fs -= 2; g.font = `bold ${fs}px sans-serif`; }
-    g.fillText(txt, 256, 58); g.font = '20px sans-serif'; g.fillStyle = '#9aa3b8'; g.fillText('VALIDATOR FACILITY · AUTHORISED PERSONNEL ONLY', 256, 100); t.needsUpdate = true;
+    g.fillText(txt, 256, 58); g.font = '20px sans-serif'; g.fillStyle = '#9aa3b8'; g.fillText('VALIDATOR FACILITY · AUTHORIZED PERSONNEL ONLY', 256, 100); t.needsUpdate = true;
   }
 
   function buildFacility(){
@@ -1556,7 +1566,7 @@ const scene3 = (() => {
     for (let r = 0; r < rows; r++){ const geo = new THREE.BoxGeometry(rowW + 0.2, 2.7, 1.55); const m = new THREE.Mesh(geo, glass); m.position.set(x0, 1.35, rowZ(r) + 0.3); P.contain.add(m);
       const e = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeM); e.position.copy(m.position); P.contain.add(e); }
     room.add(P.contain);
-    // structured cabling: colour-coded bundles in trays over every row
+    // structured cabling: color-coded bundles in trays over every row
     P.cabling = new THREE.Group(); const cc = [0x2b86ff, 0xffc83d, 0x3cf29a, 0xff3cac];
     for (let r = 0; r < rows; r++){ P.cabling.add(at(box(rowW, 0.06, 0.4, M(0x7c8394, { metalness:0.6 })), x0, 2.95, rowZ(r)));
       cc.forEach((c, i) => P.cabling.add(at(box(rowW, 0.05, 0.06, M(c)), x0, 3.0, rowZ(r) - 0.13 + i*0.085))); }
@@ -2368,7 +2378,19 @@ const globe = (() => {
 let timer = null;
 function setSpeed(x){ speed = x; clearInterval(timer); if (x > 0) timer = setInterval(tick, 1000/x); render(); }
 
-function ensureWorld(){ if (!S.world || !S.world.companies) S.world = makeWorld(); if (!S.dels) S.dels = {}; }
+function ensureWorld(){
+  if (!S.world || !S.world.companies) S.world = makeWorld(); if (!S.dels) S.dels = {};
+  // migrate saves from before the city list changed
+  const cityOf = n => CITIES.find(c => c[0] === n);
+  if (S.city && !cityOf(S.city)){ S.city = null; setTimeout(() => log('📍 Your old city is no longer on the map. Pick a new one in the Network tab.', 'warn'), 500); }
+  (S.farms||[]).forEach(f => { if (!cityOf(f.city)){ const to = CITY_MOVES[f.city] || 'Lagos'; f.city = S.farms.some(x => x.city === to) ? (CITIES.find(c => !S.farms.some(x => x.city === c[0]))||CITIES[0])[0] : to; } });
+  S.world.companies.forEach(c => {
+    if (RENAMES[c.name]){ const [n, city] = RENAMES[c.name]; c.name = n; c.city = city; }
+    if (!cityOf(c.city)) c.city = CITY_MOVES[c.city] || 'Lagos';
+    const ci = cityOf(c.city); if (ci && (Math.abs(c.lat - ci[2]) > 1 || Math.abs(c.lon - ci[3]) > 1)){ c.cc = ci[1]; c.lat = ci[2] + rand(-0.6,0.6); c.lon = ci[3] + rand(-0.6,0.6); }
+  });
+  S.world.guilds.forEach((g, i) => { const m = /^g(\d+)$/.exec(g.id); if (m && GUILD_DEFS[+m[1]]) g.name = GUILD_DEFS[+m[1]][0]; });
+}
 function boot(){
   const loaded = load();
   if (loaded){

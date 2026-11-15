@@ -87,3 +87,8 @@ Drop the folder into a Vercel project (framework: "Other"). No build command nee
    - Keep the simulated companies as "bots" while the player count is small, so the world never looks empty.
 4. **Contracts:** test on PulseChain testnet v4 with Hardhat or Foundry, get an audit, then deploy to chain ID 369. Wire `wagmi`/`viem` for wallet connect. Use bridged USDC/DAI for the prize pool.
 5. **Legal:** keep entry free and prizes skill-based. Get Nigerian legal advice (ISA 2025 treats digital assets, including NFTs, as securities) before selling licences or running a prize pool.
+
+## Cities, privacy and terms
+
+- 51 player cities, listed A–Z (Accra → Zurich), with a strong U.S. lineup (Atlanta, Austin, Boston, Chicago, Dallas, Denver, Las Vegas, Los Angeles, Miami, New York, Phoenix, San Francisco, Seattle, Washington DC). Lagos is the only Nigerian city; old saves in removed cities are moved automatically.
+- `privacy.html` and `terms.html` are linked from the sign-in box, the Company tab and the help screen. **Before launch, replace `[Operator name]`, `[contact email]`, `[State]` and `[County, State]` in both files.**
