@@ -114,7 +114,7 @@
 <canvas id="scene"></canvas>
 
 <div id="hud">
-  <div class="brand"><b>Validator Tycoon</b><small id="h-company"></small></div>
+  <div class="brand"><b>Validator Tycoon</b><small id="h-company"></small><small id="h-cloud" data-act="tab" data-arg="company" style="cursor:pointer"></small></div>
   <div class="stat"><div class="k">Coins</div><div class="v" id="h-coins"></div></div>
   <div class="stat"><div class="k">Total stake</div><div class="v" id="h-stake"></div></div>
   <div class="stat"><div class="k">Validators</div><div class="v" id="h-vals"></div></div>
@@ -290,7 +290,7 @@ function log(msg, cls=''){
   t.prepend(d); while (t.children.length > 5) t.lastChild.remove();
 }
 const active = id => S.ev[id] && S.block < S.ev[id].until;
-const totalStake = () => S.ownStake + S.deleg + S.whaleStake;
+const totalStake = () => S.ownStake + S.deleg + S.whaleStake + realStake();
 const nodeSlots = () => S.nodes.reduce((a,n) => a + (NODE_TYPES[n.type].slots || 1), 0);
 const farmSlots = () => (S.farms||[]).reduce((a,f) => a + FARM_TIERS[f.tier].slots, 0);
 const totalSlots = () => nodeSlots() + farmSlots();
@@ -460,7 +460,7 @@ function tick(){
 
   let income = 0;
   if (ts > 0 && reward > 0){
-    const own = S.ownStake/ts, others = (S.deleg + S.whaleStake)/ts;
+    const own = S.ownStake/ts, others = (S.deleg + S.whaleStake + realStake())/ts;
     income = reward*own + reward*others*S.commission;
   }
   if (k === 0 && S.ownStake > 0) income += S.ownStake*BASE_RATE*0.85;   // parked in an outside pool until you can run your own
@@ -554,16 +554,52 @@ const actions = {
   worldFocus(a){ globe.open(); globe.focus(a); },
   worldGuild(){ ui.sel = null; globe.open(); globe.refresh(); },
   sel(a){ ui.sel = a || null; tab = 'network'; pbody.scrollTop = 0; if (a) globe.focus(a); globe.refresh(); },
-  del(a){ const [id, p] = a.split('|'); const c = company(id); const x = Math.floor(S.coins*(+p)); if (!c || x <= 0) return; S.coins -= x; NET.delegate(id, x); log(`🤝 Staked ${fmt(x)} with ${c.name} (${c.city}).`); globe.refresh(); },
-  undel(a){ const [id, p] = a.split('|'); const amt = Math.floor((S.dels[id]||0)*(+p)); if (amt <= 0) return; NET.undelegate(id, amt); S.unbonding.push({ amount:amt, at:S.block+UNBOND_BLOCKS }); log(`⏳ Unstaking ${fmt(amt)} from ${company(id)?.name||'company'} (${UNBOND_BLOCKS} blocks).`); globe.refresh(); },
-  joinGuild(a){ if (S.guildId || !guild(a)) return; NET.joinGuild(a); log(`🛡️ You joined ${guild(a).name}. Add coins to the pool to earn from guild validators.`, 'good'); globe.refresh(); },
-  leaveGuild(){ const g = guild(S.guildId); if (!g) return; if (S.guildStake > 0){ S.unbonding.push({ amount:S.guildStake, at:S.block+UNBOND_BLOCKS }); } S.guildStake = 0;
+  async del(a){ const [id, p] = a.split('|'); const c = company(id); const x = Math.floor(S.coins*(+p)); if (!c || x <= 0) return;
+    if (c.real){ if (!await cloudCall('Staking', () => online.sb.rpc('delegate', { p_company:c.uid, p_amount:x }))) return; S.coins -= x; log(`🤝 Staked ${fmt(x)} with ${c.name} (${c.city}), a real player.`, 'good'); render(true); return; }
+    S.coins -= x; NET.delegate(id, x); log(`🤝 Staked ${fmt(x)} with ${c.name} (${c.city}).`); globe.refresh(); },
+  async undel(a){ const [id, p] = a.split('|'); const amt = Math.floor((S.dels[id]||0)*(+p)); if (amt <= 0) return;
+    if (isReal(id)){ const c = company(id); if (!await cloudCall('Unstaking', () => online.sb.rpc('undelegate', { p_company:id.slice(2), p_amount:amt }))) return;
+      S.unbonding.push({ amount:amt, at:S.block+UNBOND_BLOCKS }); log(`⏳ Unstaking ${fmt(amt)} from ${c?.name||'player'} (${UNBOND_BLOCKS} blocks).`); render(true); return; }
+    NET.undelegate(id, amt); S.unbonding.push({ amount:amt, at:S.block+UNBOND_BLOCKS }); log(`⏳ Unstaking ${fmt(amt)} from ${company(id)?.name||'company'} (${UNBOND_BLOCKS} blocks).`); globe.refresh(); },
+  async joinGuild(a){ if (S.guildId || !guild(a)) return; const g = guild(a);
+    if (g.real){ if (!await cloudCall('Joining the guild', () => online.sb.from('guild_members').insert({ guild_id:g.uuid, player_id:uid(), stake:0 }))) return; }
+    else NET.joinGuild(a);
+    log(`🛡️ You joined ${g.name}. Add coins to the pool to earn from guild validators.`, 'good'); globe.refresh(); render(true); },
+  async leaveGuild(){ const g = guild(S.guildId); if (!g) return;
+    if (g.real){ const stake = online.myPoolServer;
+      if (stake > 0 && !await cloudCall('Withdrawing from the pool', () => online.sb.rpc('guild_pool', { p_delta:-stake }))) return;
+      if (!await cloudCall('Leaving the guild', () => online.sb.from('guild_members').delete().eq('player_id', uid()))) return;
+      if (stake > 0) S.unbonding.push({ amount:stake, at:S.block+UNBOND_BLOCKS }); S.guildId = null; S.guildStake = 0; online.myPoolServer = 0;
+      log(`You left ${g.name}. Your pooled coins are unbonding.`); globe.refresh(); render(true); return; }
+    if (S.guildStake > 0){ S.unbonding.push({ amount:S.guildStake, at:S.block+UNBOND_BLOCKS }); } S.guildStake = 0;
     if (g.id === 'g_me'){ guildMembers(g).forEach(c => c.guild = null); W().guilds = W().guilds.filter(x => x.id !== 'g_me'); }
     NET.leaveGuild(); log(`You left ${g.name}. Your pooled coins are unbonding.`); globe.refresh(); },
-  guildAdd(a){ const x = Math.floor(S.coins*(+a)); if (!S.guildId || x <= 0) return; S.coins -= x; S.guildStake += x; log(`🛡️ Added ${fmt(x)} to the ${guild(S.guildId).name} pool.`); },
-  guildOut(a){ const x = Math.floor(S.guildStake*(+a)); if (x <= 0) return; S.guildStake -= x; S.unbonding.push({ amount:x, at:S.block+UNBOND_BLOCKS }); log(`⏳ Withdrawing ${fmt(x)} from the guild pool (${UNBOND_BLOCKS} blocks).`); },
-  foundGuild(){ if (S.guildId) return; const el = document.getElementById('gname'); const name = (el && el.value.trim().slice(0,32)) || `${S.company} Guild`;
+  async guildAdd(a){ const x = Math.floor(S.coins*(+a)); if (!S.guildId || x <= 0) return; const g = guild(S.guildId);
+    if (g && g.real){ if (!await cloudCall('Adding to the pool', () => online.sb.rpc('guild_pool', { p_delta:x }))) return; S.coins -= x; log(`🛡️ Added ${fmt(x)} to the ${g.name} pool.`); render(true); return; }
+    S.coins -= x; S.guildStake += x; log(`🛡️ Added ${fmt(x)} to the ${g.name} pool.`); },
+  async guildOut(a){ const x = Math.floor(S.guildStake*(+a)); if (x <= 0) return; const g = guild(S.guildId);
+    if (g && g.real){ if (!await cloudCall('Withdrawing from the pool', () => online.sb.rpc('guild_pool', { p_delta:-x }))) return; S.unbonding.push({ amount:x, at:S.block+UNBOND_BLOCKS }); log(`⏳ Withdrawing ${fmt(x)} from the guild pool (${UNBOND_BLOCKS} blocks).`); render(true); return; }
+    S.guildStake -= x; S.unbonding.push({ amount:x, at:S.block+UNBOND_BLOCKS }); log(`⏳ Withdrawing ${fmt(x)} from the guild pool (${UNBOND_BLOCKS} blocks).`); },
+  async foundGuild(){ if (S.guildId) return; const el = document.getElementById('gname'); const name = (el && el.value.trim().slice(0,32)) || `${S.company} Guild`;
+    if (S.coins < GUILD_FOUND_COST) return;
+    if (online.user){
+      let gid = null;
+      const ok = await cloudCall('Founding the guild', async () => { const r = await online.sb.from('guilds').insert({ name, owner_id:uid(), color:0xff3cac, fee:0.05 }).select('id').single();
+        if (r.error) return r; gid = r.data.id; return online.sb.from('guild_members').insert({ guild_id:gid, player_id:uid(), stake:0 }); });
+      if (!ok) return; spend(GUILD_FOUND_COST); ui.gname = '';
+      log(`🛡️ You founded ${name}! Real players can now find it and join.`, 'good'); globe.refresh(); render(true); return; }
     if (!spend(GUILD_FOUND_COST)) return; NET.foundGuild(name); log(`🛡️ You founded ${name}! Companies will start joining.`, 'good'); globe.refresh(); },
+  authIn(){ authDo('in'); }, authUp(){ authDo('up'); }, authGuest(){ authDo('guest'); },
+  authOffline(){ try { localStorage.setItem('vt_offline', '1'); } catch(e){} closeModal(); log('Playing offline. Sign in any time from the Company tab.'); },
+  authOpen(){ showAuth(); },
+  async authOut(){ await cloudSync(true); clearInterval(online.timer); await online.sb.auth.signOut(); online.user = null; online.status = 'signedout'; online.realCos = []; online.realGuilds = []; online.realDeleg = 0;
+    for (const k of Object.keys(S.dels)) if (isReal(k)) delete S.dels[k]; if (isRealGuild(S.guildId)){ S.guildId = null; S.guildStake = 0; }
+    log('Signed out. Your progress is saved in the cloud.'); render(true); globe.refresh(); },
+  async authLink(){ const email = (document.getElementById('lk_email')?.value || '').trim(), password = document.getElementById('lk_pass')?.value || '';
+    if (!email || password.length < 6) return log('Enter an email and a password of at least 6 characters.', 'warn');
+    const r = await online.sb.auth.updateUser({ email, password }); if (r.error) return log(`Could not save the account: ${r.error.message}`, 'bad');
+    log('✉️ Check your email to confirm it. Your guest progress now belongs to this account.', 'good'); render(true); },
+  syncNow(){ cloudSync(true).then(() => log(online.status === 'online' ? '☁️ Synced.' : `☁️ Sync failed: ${online.err}`, online.status === 'online' ? 'good' : 'bad')); },
   fac(a){ const F = FACILITY[a]; if (!F || S.fac[a]) return; if (F.req && !(S[F.req] || S.fac[F.req])) return; if (!spend(F.cost)) return; S.fac[a] = true; log(`🏗️ Installed ${F.name}.`, 'good'); scene3.syncProps(); },
   crac(){ if ((S.crac||0) >= CRAC_MAX || !spend(cracCost())) return; S.crac = (S.crac||0) + 1; log('❄️ Installed a precision CRAC cooling unit.'); scene3.syncProps(); },
   upsUp(){ const L = UPS_LEVELS[(S.upsLvl||1)+1]; if (!S.ups || !L || !spend(L.cost)) return; S.upsLvl++; log(`🔋 UPS upgraded: now covers ${L.cap} blocks.`); scene3.syncProps(); },
@@ -673,14 +709,14 @@ function makeWorld(){
   return { companies, guilds, nextJoin: 80, nextRegional: 150 };
 }
 const W = () => S.world;
-const company = id => W().companies.find(c => c.id === id);
-const guild = id => W().guilds.find(g => g.id === id);
-const coVals = c => Math.min(400, Math.max(1, Math.floor(c.nw*0.6/VSTAKE)));
+const company = id => NET.companies().find(c => c.id === id);
+const guild = id => NET.guilds().find(g => g.id === id);
+const coVals = c => c.real ? c.vals : Math.min(400, Math.max(1, Math.floor(c.nw*0.6/VSTAKE)));
 const coOnline = c => S.block >= c.down;
-const guildMembers = g => W().companies.filter(c => c.guild === g.id);
+const guildMembers = g => NET.companies().filter(c => c.guild === g.id);
 const guildNpcStake = g => guildMembers(g).reduce((a,c) => a + c.nw*0.08, 0);
 const myGuildStakeIn = g => (S.guildId === g.id ? S.guildStake : 0);
-const guildTotal = g => guildNpcStake(g) + myGuildStakeIn(g);
+const guildTotal = g => g.real ? Math.max(0, g.pooled - (S.guildId === g.id ? online.myPoolServer : 0)) + myGuildStakeIn(g) : guildNpcStake(g) + myGuildStakeIn(g);
 const guildVals = g => Math.floor(guildTotal(g)/VSTAKE);
 function guildUptime(g){
   const m = guildMembers(g); let on = m.filter(coOnline).length, n = m.length;
@@ -691,9 +727,9 @@ const delegatedTotal = () => Object.values(S.dels).reduce((a,b)=>a+b, 0);
 
 // NET: the only place other players are read or changed. Simulated today.
 const NET = {
-  mode: 'simulated',
-  companies(){ return W().companies; },
-  guilds(){ return W().guilds; },
+  get mode(){ return online.user ? 'online' : 'simulated'; },
+  companies(){ return online.user ? W().companies.concat(online.realCos) : W().companies; },
+  guilds(){ return online.user ? W().guilds.concat(online.realGuilds) : W().guilds; },
   delegate(id, amt){ S.dels[id] = (S.dels[id]||0) + amt; },
   undelegate(id, amt){ S.dels[id] = Math.max(0, (S.dels[id]||0) - amt); if (S.dels[id] < 1) delete S.dels[id]; },
   joinGuild(id){ S.guildId = id; },
@@ -716,7 +752,7 @@ function worldTick(){
     }
   });
   // block proposals for the globe
-  const on = w.companies.filter(coOnline);
+  const on = NET.companies().filter(coOnline);
   for (let i = 0; i < Math.min(5, on.length); i++){ const c = on[randi(0, on.length-1)]; if (Math.random() < 0.6) pulses.push({ id:c.id, kind:'block' }); }
   if (pulses.length > 60) pulses.splice(0, pulses.length - 60);
   // regional outages
@@ -778,10 +814,149 @@ function networkIncome(){
 }
 
 /* =========================================================
+   ONLINE (Supabase): sign-in, cloud saves, real players on the map,
+   staking with real players and real guilds. If Supabase can't be reached
+   (e.g. inside the claude.ai preview) the game keeps working offline.
+   ========================================================= */
+const CLOUD = {
+  url: 'https://ieiluyjwhpjzofvasyck.supabase.co',
+  key: 'sb_publishable_wR20VuTCHR6BFZS_gPT-SQ_afKTCEuU',          // publishable key: safe in a web page
+  lib: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm',
+  syncEvery: 30_000,
+};
+const online = { sb:null, user:null, status:'starting', err:'', realCos:[], realGuilds:[], realDeleg:0, myPoolServer:0, timer:null, busy:false, warned:false };
+const isReal = id => typeof id === 'string' && id.startsWith('p_');
+const isRealGuild = id => typeof id === 'string' && id.startsWith('rg_');
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timed out')), ms))]);
+const realStake = () => online.user ? online.realDeleg : 0;
+const uid = () => online.user && online.user.id;
+
+async function cloudInit(){
+  try {
+    const mod = await withTimeout(import(CLOUD.lib), 15000);
+    online.sb = mod.createClient(CLOUD.url, CLOUD.key, { auth:{ persistSession:true, autoRefreshToken:true, storageKey:'vtycoon-auth' } });
+    const { data } = await withTimeout(online.sb.auth.getSession(), 10000);
+    online.user = data && data.session ? data.session.user : null;
+    online.sb.auth.onAuthStateChange((_e, session) => { online.user = session ? session.user : null; render(true); });
+    online.status = online.user ? 'connecting' : 'signedout';
+    return true;
+  } catch (e) { online.status = 'unavailable'; online.err = e.message || String(e); online.sb = null; return false; }
+}
+async function cloudStart(){
+  const ok = await cloudInit(); render(true);
+  if (!ok) return;
+  if (online.user) await afterSignIn();
+  else { let off = false; try { off = localStorage.getItem('vt_offline') === '1'; } catch(e){}
+    if (!off){ while (document.getElementById('modal').classList.contains('on')) await new Promise(r => setTimeout(r, 400)); showAuth(); } }
+}
+function showAuth(msg = ''){
+  if (!online.sb){ showModal(`<h2>Online play isn't available here</h2><p>This copy can't reach the game server (the claude.ai preview blocks it). Play on the published site to sign in.</p><div class="btns"><button class="btn" data-act="closeModal">OK</button></div>`); return; }
+  showModal(`<h2>Play online</h2>
+    <p>Sign in to save in the cloud, appear on the world map, stake with real players and join real guilds.</p>
+    <input type="email" id="au_email" placeholder="Email" autocomplete="email" style="margin-top:6px">
+    <input type="password" id="au_pass" placeholder="Password (6+ characters)" autocomplete="current-password" style="margin-top:6px">
+    <div class="btns"><button class="btn" data-act="authIn">Sign in</button><button class="btn ghost" data-act="authUp">Create account</button></div>
+    <div class="btns" style="margin-top:10px"><button class="btn ghost" data-act="authGuest">Play as guest</button><button class="btn ghost" data-act="authOffline">Play offline</button></div>
+    <p id="au_msg" style="color:${msg.startsWith('✓')?'var(--good)':'var(--bad)'};min-height:1em">${esc(msg)}</p>
+    <p class="note">Guests can add an email later in the Company tab to keep their progress.</p>`);
+}
+const authVals = () => ({ email:(document.getElementById('au_email')?.value || '').trim(), password:document.getElementById('au_pass')?.value || '' });
+const authMsg = m => { const el = document.getElementById('au_msg'); if (el){ el.textContent = m; el.style.color = m.startsWith('✓') ? 'var(--good)' : 'var(--bad)'; } };
+async function authDo(kind){
+  if (!online.sb) return showAuth();
+  const { email, password } = authVals();
+  try {
+    let res;
+    if (kind === 'guest') res = await online.sb.auth.signInAnonymously();
+    else {
+      if (!email || password.length < 6) return authMsg('Enter an email and a password of at least 6 characters.');
+      res = kind === 'up' ? await online.sb.auth.signUp({ email, password }) : await online.sb.auth.signInWithPassword({ email, password });
+    }
+    if (res.error){ const m = res.error.message || 'Sign-in failed';
+      return authMsg(/anonymous/i.test(m) ? 'Guest play is switched off on the server. Use an email for now.' : m); }
+    if (kind === 'up' && !res.data.session) return authMsg('✓ Account created. Check your email to confirm it, then sign in.');
+    online.user = res.data.user || (res.data.session && res.data.session.user);
+    try { localStorage.removeItem('vt_offline'); } catch(e){}
+    closeModal(); await afterSignIn();
+  } catch (e) { authMsg(e.message || String(e)); }
+}
+async function afterSignIn(){
+  online.status = 'connecting'; render(true);
+  try {
+    const me = uid();
+    const { data, error } = await withTimeout(online.sb.from('saves').select('state').eq('player_id', me).maybeSingle(), 15000);
+    if (error) throw error;
+    const cloud = data && data.state;
+    const localIsMine = !S.owner || S.owner === me;
+    if (cloud && (!localIsMine || (cloud.lastSave || 0) > (S.lastSave || 0) || (cloud.lifetime || 0) > (S.lifetime || 0) * 1.05)){
+      S = Object.assign(freshState(), cloud);
+      S.nodes.forEach(n => { n.assigned = false; if (n.status === 'repairing') n.status = 'broken'; });
+      ensureWorld(); selected = -1; scene3.full(); log('☁️ Loaded your cloud save.', 'good');
+    } else if (!localIsMine){
+      S = freshState({ seenHelp:true }); ensureWorld(); selected = -1; scene3.full(); log('☁️ New account: starting a fresh company.', 'good');
+    }
+    S.owner = me;
+    online.status = 'online';
+    await cloudSync(true);
+    clearInterval(online.timer); online.timer = setInterval(() => cloudSync(), CLOUD.syncEvery);
+    log(`☁️ Online as ${online.user.is_anonymous ? 'guest' : online.user.email}.`, 'good');
+  } catch (e) { online.status = 'error'; online.err = e.message || String(e); log('☁️ Could not reach the game server. Playing offline for now.', 'warn'); }
+  render(true);
+}
+async function cloudPush(){
+  if (!online.user) return false;
+  const r = await withTimeout(online.sb.rpc('submit_save', { p_state: S }), 15000);
+  if (r.error) throw r.error;
+  if (r.data && r.data.ok === false && !online.warned){ online.warned = true; log('☁️ The server refused a save (progress looked too fast). It will retry.', 'warn'); }
+  return true;
+}
+async function cloudSync(force = false){
+  if (!online.sb || !online.user || (online.busy && !force)) return;
+  online.busy = true;
+  try {
+    const me = uid(), sb = online.sb;
+    S.owner = me; S.lastSave = Date.now();
+    await cloudPush();
+    const ci = CITIES.find(c => c[0] === S.city);
+    const up = await sb.rpc('update_company', { p_name:S.company, p_city:S.city || null, p_lat:ci ? ci[2] : null, p_lon:ci ? ci[3] : null,
+      p_validators:rt.k, p_reputation:+S.rep.toFixed(2), p_commission:S.commission, p_online:!!(rt.powered && rt.netOk) });
+    if (up.error) throw up.error;
+    const [cos, gps, toMe, mine, mem] = await Promise.all([
+      sb.from('world_companies').select('*').limit(300),
+      sb.from('guild_pools').select('*').limit(200),
+      sb.from('delegations').select('amount').eq('company_id', me),
+      sb.from('delegations').select('company_id,amount').eq('staker_id', me),
+      sb.from('guild_members').select('guild_id,stake').eq('player_id', me).maybeSingle(),
+    ]);
+    for (const r of [cos, gps, toMe, mine, mem]) if (r.error) throw r.error;
+    online.realCos = (cos.data || []).filter(p => p.id !== me).map(p => { const c = CITIES.find(x => x[0] === p.city);
+      return { id:'p_' + p.id, uid:p.id, real:true, name:p.company_name, city:p.city, cc:c ? c[1] : 'UN', lat:+p.lat + 0.3, lon:+p.lon - 0.3,
+        nw:+p.net_worth || 0, rep:+p.reputation || 50, comm:+p.commission || 0.1, guild:p.guild_id ? 'rg_' + p.guild_id : null,
+        down:p.online ? 0 : Infinity, slashed:p.recently_slashed ? S.block + 10 : 0, vals:p.validators || 0 }; });
+    online.realGuilds = (gps.data || []).map(g => ({ id:'rg_' + g.id, uuid:g.id, real:true, name:g.name, color:g.color, fee:+g.fee,
+      founder:g.owner_id === me ? 'me' : 'p_' + g.owner_id, pooled:+g.pooled || 0, members:+g.members || 0 }));
+    online.realDeleg = (toMe.data || []).reduce((a, r) => a + (+r.amount || 0), 0);
+    // the server is the source of truth for stakes with real players and real guild pools
+    for (const k of Object.keys(S.dels)) if (isReal(k)) delete S.dels[k];
+    (mine.data || []).forEach(r => { S.dels['p_' + r.company_id] = +r.amount; });
+    if (mem.data){ S.guildId = 'rg_' + mem.data.guild_id; S.guildStake = +mem.data.stake; online.myPoolServer = +mem.data.stake; }
+    else if (isRealGuild(S.guildId)){ S.guildId = null; S.guildStake = 0; online.myPoolServer = 0; }
+    online.status = 'online'; online.err = '';
+  } catch (e) { online.status = 'error'; online.err = e.message || String(e); }
+  finally { online.busy = false; globe.refresh(); render(); }
+}
+// actions that touch other real players: run on the server first, then mirror locally
+async function cloudCall(label, fn){
+  try { await cloudPush(); const r = await fn(); if (r.error) throw r.error; if (r.data && r.data.ok === false) throw new Error(r.data.reason || 'refused');
+    await cloudSync(true); return true; }
+  catch (e) { log(`☁️ ${label} failed: ${e.message || e}`, 'bad'); render(true); return false; }
+}
+
+/* =========================================================
    UI RENDER
    ========================================================= */
 function leaderboard(){
-  const list = NET.companies().map(c => ({ name:c.name, nw:c.nw, cc:c.cc }));
+  const list = NET.companies().map(c => ({ name:(c.real ? '👤 ' : '') + c.name, nw:c.nw, cc:c.cc }));
   list.push({ name:S.company, nw:netWorth(), me:true });
   return list.sort((a,b)=>b.nw-a.nw);
 }
@@ -931,14 +1106,29 @@ function tabStake(){
     <div class="kv"><span>Reward multiplier</span><span>×${(forkMult()*(liveBonus>0?1.1:1)).toFixed(2)}</span></div>
   </div></div>`;
 }
+function accountSection(){
+  let body;
+  if (online.user){
+    const guest = online.user.is_anonymous;
+    body = `<div class="kv"><span>Signed in as</span><span>${guest ? 'Guest' : esc(online.user.email || '')}</span></div>
+      <div class="kv"><span>Cloud</span><span style="color:${online.status==='online'?'var(--good)':'var(--bad)'}">${online.status === 'online' ? 'Synced every 30s' : esc(online.err || online.status)}</span></div>
+      ${guest ? `<div class="desc" style="margin-top:6px">Add an email so you never lose this company:</div><input type="email" id="lk_email" data-input="lk" placeholder="Email" style="margin-top:4px"><input type="password" id="lk_pass" data-input="lk" placeholder="Password (6+)" style="margin-top:4px"><div class="btns"><button class="btn sm" data-act="authLink">Save account</button></div>` : ''}
+      <div class="btns"><button class="btn sm ghost" data-act="syncNow">Sync now</button><button class="btn sm ghost" data-act="authOut">Sign out</button></div>`;
+  } else if (online.sb){
+    body = `<div class="desc">Sign in to save in the cloud and play with real players.</div><div class="btns"><button class="btn sm" data-act="authOpen">Sign in / create account</button></div>`;
+  } else {
+    body = `<div class="desc">${online.status === 'starting' ? 'Connecting…' : 'Online play isn\'t available in this copy. Your progress saves in this browser.'}</div>`;
+  }
+  return `<div class="sec"><h3>Account</h3><div class="card">${body}</div></div>`;
+}
 function tabCompany(){
   const full = leaderboard(), myRank = full.findIndex(r => r.me);
   const lb = full.map((r,i) => ({...r, i})).filter(r => r.i < 10 || r.me).map(r => `<div class="lb ${r.me?'me':''}"><span>#${r.i+1} ${r.cc?FLAGS(r.cc)+' ':''}${esc(r.name)}</span><span class="mono">${fmt(r.nw)}</span></div>`).join('');
   const gl = NET.guilds().slice().sort((a,b)=>guildTotal(b)-guildTotal(a)).slice(0,8).map((g,i)=>`<div class="lb ${S.guildId===g.id?'me':''}"><span>#${i+1} <span style="color:#${g.color.toString(16).padStart(6,'0')}">●</span> ${esc(g.name)}</span><span class="mono">${guildVals(g)} val · ${fmt(guildTotal(g))}</span></div>`).join('');
   const g = forkGain();
-  return `<div class="sec"><h3>Company name</h3><input type="text" maxlength="28" value="${esc(S.company)}" data-input="name"></div>
+  return `${accountSection()}<div class="sec"><h3>Company name</h3><input type="text" maxlength="28" value="${esc(S.company)}" data-input="name"></div>
   <div class="sec"><h3>Your CEO (sits at the desk)</h3><div class="btns">${scene3.CEO_CAST.map(k=>`<button class="btn sm ${S.ceo===k?'':'ghost'}" data-act="ceo" data-arg="${k}">${scene3.NAMES[k]}</button>`).join('')}</div></div>
-  <div class="sec"><h3>Season ${S.season} leaderboard · ends in ${S.seasonEnd - S.block} blocks</h3><div class="card">${lb}</div><div class="note">You're #${myRank+1} of ${full.length}. Ranked by net worth. Other companies are computer-run for now; real players come with the online version.</div></div>
+  <div class="sec"><h3>Season ${S.season} leaderboard · ends in ${S.seasonEnd - S.block} blocks</h3><div class="card">${lb}</div><div class="note">You're #${myRank+1} of ${full.length}. Ranked by net worth. ${online.user ? '👤 marks real players; the rest are computer-run companies.' : 'Other companies are computer-run. Sign in to compete with real players.'}</div></div>
   <div class="sec"><h3>Guild leaderboard</h3><div class="card">${gl}</div></div>
   <div class="sec"><h3>Hard Fork</h3><div class="card">
     <div class="kv"><span>Lifetime earnings</span><span>${fmt(S.lifetime)}</span></div>
@@ -956,7 +1146,7 @@ function tabCompany(){
 function companyCard(c){
   const g = c.guild && guild(c.guild), mine = S.dels[c.id] || 0, per1m = 1e6*UNIT_RATE*DELEGATE_EFF*(1-c.comm);
   return `<div class="card" style="border-color:rgba(255,60,172,.5)">
-    <div class="row"><div class="name">${esc(c.name)}</div>${coOnline(c)?(S.block<c.slashed?'<span class="tag bad">SLASHED</span>':'<span class="tag good">ONLINE</span>'):'<span class="tag bad">OFFLINE</span>'}</div>
+    <div class="row"><div class="name">${c.real?'👤 ':''}${esc(c.name)}</div>${coOnline(c)?(S.block<c.slashed?'<span class="tag bad">SLASHED</span>':'<span class="tag good">ONLINE</span>'):'<span class="tag bad">OFFLINE</span>'}</div>
     <div class="desc">${esc(c.city)} ${FLAGS(c.cc)}${g?` · Guild: <b>${esc(g.name)}</b>`:''}</div>
     <div class="kv"><span>Validators</span><span>${coVals(c)}</span></div>
     <div class="kv"><span>Reputation</span><span>${c.rep.toFixed(0)} / 100</span></div>
@@ -990,7 +1180,7 @@ function guildCard(g){
 }
 function tabNetwork(){
   const cos = NET.companies(), countries = new Set(cos.map(c=>c.cc)).size;
-  let h = `<div class="sec"><h3>World map</h3><div class="card"><div class="row"><div><div class="name">🌍 Validator World</div><div class="desc">${cos.length} companies in ${countries} countries.${NET.mode==='simulated'?' Other companies are computer-run for now.':''}</div></div><button class="btn sm" data-act="world">Open globe</button></div>
+  let h = `<div class="sec"><h3>World map</h3><div class="card"><div class="row"><div><div class="name">🌍 Validator World</div><div class="desc">${cos.length} companies in ${countries} countries.${NET.mode==='simulated'?' Other companies are computer-run. Sign in to see real players.':` ${online.realCos.length} real player${online.realCos.length===1?'':'s'} online with you (👤).`}</div></div><button class="btn sm" data-act="world">Open globe</button></div>
     <div class="desc" style="margin-top:8px">Your city on the map (pick one; your real location is never used)</div>
     <select data-input="city">${S.city?'':'<option value="">— choose a city —</option>'}${CITIES.map(c=>`<option value="${esc(c[0])}" ${S.city===c[0]?'selected':''}>${esc(c[0])} ${FLAGS(c[1])}</option>`).join('')}</select></div></div>`;
   const c = ui.sel && company(ui.sel);
@@ -1005,7 +1195,7 @@ function tabNetwork(){
       <input type="text" id="gname" maxlength="32" placeholder="Guild name" data-input="gname" value="${esc(ui.gname)}" style="margin-top:6px"><div class="btns"><button class="btn sm" data-act="foundGuild" ${S.coins<GUILD_FOUND_COST?'disabled':''}>Found guild · ${fmt(GUILD_FOUND_COST)}</button></div></div></div>`;
   }
   const list = cos.slice().sort((a,b)=>b.nw-a.nw);
-  h += `<div class="sec"><h3>All companies</h3><input type="text" placeholder="Search name, city or country…" data-input="search" value="${esc(ui.search)}" style="margin-bottom:6px"><div class="card" id="codir">${list.map(x=>`<div class="lb" style="cursor:pointer" data-act="sel" data-arg="${x.id}" data-name="${esc((x.name+' '+x.city+' '+x.cc).toLowerCase())}" ${ui.search && !(x.name+' '+x.city+' '+x.cc).toLowerCase().includes(ui.search.toLowerCase())?'style="display:none"':''}><span>${FLAGS(x.cc)} ${esc(x.name)} <span style="color:var(--dim)">${esc(x.city)}</span></span><span class="mono">${coVals(x)} val · ${(x.comm*100).toFixed(0)}%</span></div>`).join('')}</div></div>`;
+  h += `<div class="sec"><h3>All companies</h3><input type="text" placeholder="Search name, city or country…" data-input="search" value="${esc(ui.search)}" style="margin-bottom:6px"><div class="card" id="codir">${list.map(x=>`<div class="lb" style="cursor:pointer" data-act="sel" data-arg="${x.id}" data-name="${esc((x.name+' '+x.city+' '+x.cc).toLowerCase())}" ${ui.search && !(x.name+' '+x.city+' '+x.cc).toLowerCase().includes(ui.search.toLowerCase())?'style="display:none"':''}><span>${FLAGS(x.cc)} ${x.real?'👤 ':''}${esc(x.name)} <span style="color:var(--dim)">${esc(x.city)}</span></span><span class="mono">${coVals(x)} val · ${(x.comm*100).toFixed(0)}%</span></div>`).join('')}</div></div>`;
   return h;
 }
 
@@ -1037,6 +1227,7 @@ function morphKids(a, b){
 function render(force=false){
   $('#h-company').textContent = S.company + (S.forkPoints?` · fork ×${forkMult().toFixed(2)}`:'');
   $('#h-coins').textContent = fmt(S.coins);
+  const hc = $('#h-cloud'); if (hc){ hc.textContent = online.user ? (online.status === 'online' ? '☁️ Online' : '⚠️ Cloud error') : online.sb ? '○ Offline · sign in' : '○ Offline'; hc.style.color = online.user && online.status === 'online' ? 'var(--good)' : 'var(--dim)'; }
   $('#h-stake').textContent = fmt(totalStake());
   $('#h-vals').innerHTML = `${rt.k}<span style="color:var(--dim)">/${totalSlots()}</span>`;
   $('#h-rep').textContent = S.rep.toFixed(0);
@@ -1940,7 +2131,7 @@ const globe = (() => {
       if (id.startsWith('farm')){ const f = S.farms[+id.slice(4)]; if (f){ t.innerHTML = `<b>Your ${FARM_TIERS[f.tier].name}</b><br>${esc(f.city)} · ${FARM_TIERS[f.tier].slots} slots<br>${farmUp(f)?'<span style="color:#3cf29a">online</span>':'<span style="color:#ff5468">down</span>'}`;
         const r = canvas.getBoundingClientRect(); t.style.left = (e.clientX - r.left + 14) + 'px'; t.style.top = (e.clientY - r.top + 10) + 'px'; t.style.display = 'block'; } return; }
       const c = id === 'me' ? null : company(id);
-      t.innerHTML = c ? `<b>${esc(c.name)}</b><br>${esc(c.city)} ${FLAGS(c.cc)} · ${coVals(c)} validators<br>${coOnline(c)?'<span style="color:#3cf29a">online</span>':'<span style="color:#ff5468">offline</span>'} · ${(c.comm*100).toFixed(0)}% commission${c.guild?'<br>Guild: '+esc(guild(c.guild)?.name||''):''}`
+      t.innerHTML = c ? `<b>${c.real?'👤 ':''}${esc(c.name)}</b>${c.real?' <span style="color:#3cf29a">real player</span>':''}<br>${esc(c.city)} ${FLAGS(c.cc)} · ${coVals(c)} validators<br>${coOnline(c)?'<span style="color:#3cf29a">online</span>':'<span style="color:#ff5468">offline</span>'} · ${(c.comm*100).toFixed(0)}% commission${c.guild?'<br>Guild: '+esc(guild(c.guild)?.name||''):''}`
         : `<b>${esc(S.company)} (you)</b><br>${esc(S.city)} · ${rt.k} validators`;
       const r = canvas.getBoundingClientRect(); t.style.left = (e.clientX - r.left + 14) + 'px'; t.style.top = (e.clientY - r.top + 10) + 'px'; t.style.display = 'block';
     });
@@ -1970,7 +2161,7 @@ const globe = (() => {
       live.add(c.id);
       const h = 0.03 + Math.min(0.22, Math.log10(1 + coVals(c)) * 0.08);
       let p = pins.get(c.id);
-      const col = c.guild ? (guild(c.guild)?.color ?? 0x9aa4ff) : 0x9aa4ff;
+      const col = c.guild ? (guild(c.guild)?.color ?? 0x9aa4ff) : c.real ? 0xffffff : 0x9aa4ff;
       if (!p){ p = makePin(c.id, c.lat, c.lon, col, h); p.c = c; pins.set(c.id, p); }
       p.spike.scale.y = h; p.head.position.y = h; p.hit.position.y = h;
       const sel = ui.sel === c.id, staked = !!S.dels[c.id];
@@ -2078,7 +2269,8 @@ function boot(){
   setSpeed(1);
   if (!S.seenHelp){ S.seenHelp = true; showHelp(); log('Welcome! Start by staking your coins in the Staking tab.', 'good'); }
   pollChain();
-  addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+  cloudStart();
+  addEventListener('visibilitychange', () => { if (document.hidden){ save(); cloudSync(); } });
   addEventListener('beforeunload', save);
 }
 boot();

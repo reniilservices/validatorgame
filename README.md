@@ -6,7 +6,7 @@ A 3D isometric idle/tycoon game about running a staking company on a PulseChain-
 
 | Path | What it is | Status |
 |---|---|---|
-| `index.html` | The whole playable game (Three.js, single file, no build step) | **Playable** |
+| `index.html` | The whole playable game (Three.js, single file, no build step), with online play via Supabase | **Playable** |
 | `chars/*.glb` | 12 Mixamo characters, converted and compressed (512px WebP textures + meshopt), ~0.4–0.75 MB each | Loaded on demand |
 | `anims.js` | 32 Mixamo animations packed into one compact module (~1 MB) | Loaded at start |
 | `contracts/ValidatorLicence.sol` | ERC-1155 limited-supply cosmetic company licences, paid in PLS | Compiles (solc 0.8.24, OpenZeppelin 5.0.2), not audited or deployed |
@@ -40,6 +40,23 @@ A 3D isometric idle/tycoon game about running a staking company on a PulseChain-
 - **3D globe (🌍 World button):** dot-matrix Earth, a pin per company at its city (pin colour = guild, height = validators), white ripples for blocks, red for slashes, orange for outages, green when a company joins. Arcs link your guild (or the selected company's guild). Click a pin to view and stake. Players choose a city; real location is never used.
 - **Badges, season leaderboard** (top 10 + your rank out of every company), offline earnings (50%, max 8h), local saves.
 - **Live chain heartbeat:** polls `https://rpc.pulsechain.com` for real block numbers and gives a +10% bonus per new real block. Blocked inside the claude.ai artifact (no outside network calls); works when hosted on your own domain.
+
+## Online play (Supabase)
+
+The game connects to the Supabase project `ieiluyjwhpjzofvasyck` (URL and publishable key are in `CLOUD` at the top of the online section of `index.html`; the publishable key is meant to be public).
+
+- **Sign-in:** email + password, or **Play as guest** (anonymous). Guests can attach an email later in the Company tab. **Play offline** skips the server entirely.
+- **Cloud saves:** every 30 seconds and when the tab is hidden, via `submit_save` (rejects impossible progress). On sign-in the newer of cloud/local save wins; another account's local save is never uploaded.
+- **Real players:** your company profile (name, chosen city, validators, reputation, commission, online) is published via `update_company`. Real players appear on the globe (white or guild-coloured pins), in the company list and on the leaderboard with 👤, alongside the computer-run companies.
+- **Staking with real players:** `delegate` / `undelegate` run on the server first (coins checked there). Real players staking with *you* add to your total stake and pay you commission.
+- **Real guilds:** found (5M coins), join, pool, withdraw and leave; pool changes go through `guild_pool`. Bot guilds still work locally.
+- **Offline fallback:** if Supabase or the library CDN can't be reached (e.g. the claude.ai preview), the game runs exactly as before with local saves.
+
+**One-time Supabase settings (dashboard):**
+1. Authentication → Sign In / Providers → enable **Allow anonymous sign-ins** (for guest play).
+2. Authentication → URL Configuration → set **Site URL** to the live Vercel address, so email confirmation links open the game.
+
+**Deploy:** Vercel → Add New → Project → import `reniilservices/validatorgame`, framework *Other*, no build command. Every push to `main` redeploys.
 
 ## Run it locally
 
