@@ -1874,7 +1874,7 @@ const scene3 = (() => {
   let ceo = null;
   const chairPos = () => new THREE.Vector3(-E.w/2 + 2.6, 0, E.d/2 - 0.62);
   function spawnCEO(){
-    if (ceo){ ceo.g.removeFromParent(); ceo = null; }
+    if (ceo){ if (ceo.g) ceo.g.removeFromParent(); ceo = null; }
     const key = CEO_CAST.includes(S.ceo) ? S.ceo : 'martha';
     const token = {}; ceo = { key, token, g:null, actor:null, react:null };
     spawn(key).then(a => {
