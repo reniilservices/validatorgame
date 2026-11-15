@@ -33,12 +33,13 @@ alter table public.guilds
 
 -- ---------- functions the game calls (all checked server-side) ----------
 -- Profile + heartbeat, sent every ~30s with the save.
-create or replace function public.update_company(p_city text, p_lat numeric, p_lon numeric,
+create or replace function public.update_company(p_name text, p_city text, p_lat numeric, p_lon numeric,
   p_validators int, p_reputation numeric, p_commission numeric, p_online boolean)
 returns void language plpgsql security definer set search_path = public as $$
 begin
   if auth.uid() is null then raise exception 'not signed in'; end if;
-  update public.players set city = p_city, lat = p_lat, lon = p_lon,
+  insert into public.players (id) values (auth.uid()) on conflict do nothing;
+  update public.players set company_name = coalesce(nullif(left(trim(p_name), 28), ''), company_name), city = p_city, lat = p_lat, lon = p_lon,
     validators = greatest(0, least(p_validators, 2000)), reputation = greatest(0, least(p_reputation, 100)),
     commission = greatest(0, least(p_commission, 0.25)), online = p_online, last_seen = now()
   where id = auth.uid();
@@ -113,7 +114,11 @@ create policy "delegations readable by all" on public.delegations for select usi
 -- writes only through delegate() / undelegate()
 
 grant select on public.world_companies, public.guild_pools to anon, authenticated;
-grant execute on function public.update_company(text, numeric, numeric, int, numeric, numeric, boolean) to authenticated;
+revoke execute on function public.update_company(text, text, numeric, numeric, int, numeric, numeric, boolean) from public, anon;
+revoke execute on function public.delegate(uuid, numeric) from public, anon;
+revoke execute on function public.undelegate(uuid, numeric) from public, anon;
+revoke execute on function public.guild_pool(numeric) from public, anon;
+grant execute on function public.update_company(text, text, numeric, numeric, int, numeric, numeric, boolean) to authenticated;
 grant execute on function public.delegate(uuid, numeric) to authenticated;
 grant execute on function public.undelegate(uuid, numeric) to authenticated;
 grant execute on function public.guild_pool(numeric) to authenticated;

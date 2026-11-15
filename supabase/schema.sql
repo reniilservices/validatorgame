@@ -57,6 +57,7 @@ create table if not exists public.badges (
 );
 
 -- ---------- leaderboards ----------
+-- Public leaderboards expose only public columns (never the save state).
 create or replace view public.leaderboard as
   select p.id, p.company_name, s.net_worth, s.fork_points,
          rank() over (order by s.net_worth desc) as rank
@@ -118,17 +119,18 @@ alter table public.seasons       enable row level security;
 alter table public.badges        enable row level security;
 
 create policy "players readable by all"   on public.players for select using (true);
-create policy "update own player"         on public.players for update using (id = auth.uid());
+-- no direct updates to players: profile changes go through update_company()
 create policy "read own save"             on public.saves   for select using (player_id = auth.uid());
 -- no insert/update policy on saves: writes only via submit_save()
 create policy "guilds readable by all"    on public.guilds  for select using (true);
 create policy "create guild as owner"     on public.guilds  for insert with check (owner_id = auth.uid());
 create policy "owner edits guild"         on public.guilds  for update using (owner_id = auth.uid());
 create policy "members readable by all"   on public.guild_members for select using (true);
-create policy "join guild as self"        on public.guild_members for insert with check (player_id = auth.uid());
+create policy "join guild as self"        on public.guild_members for insert with check (player_id = auth.uid() and stake = 0);
 create policy "leave guild as self"       on public.guild_members for delete using (player_id = auth.uid());
 create policy "seasons readable by all"   on public.seasons for select using (true);
 create policy "read own badges"           on public.badges  for select using (player_id = auth.uid());
 
 grant select on public.leaderboard, public.guild_leaderboard to anon, authenticated;
+revoke execute on function public.submit_save(jsonb) from public, anon;
 grant execute on function public.submit_save(jsonb) to authenticated;

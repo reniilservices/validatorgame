@@ -12,8 +12,9 @@ A 3D isometric idle/tycoon game about running a staking company on a PulseChain-
 | `contracts/ValidatorLicence.sol` | ERC-1155 limited-supply cosmetic company licences, paid in PLS | Compiles (solc 0.8.24, OpenZeppelin 5.0.2), not audited or deployed |
 | `contracts/TycoonBadges.sol` | Soulbound achievement badges; server signs, player claims | Compiles, not deployed |
 | `contracts/SeasonPrizePool.sol` | Stablecoin prize pool with Merkle-proof claims per season | Compiles, not deployed |
-| `supabase/schema.sql` | Cloud saves with anti-cheat, guilds, leaderboards, RLS | Ready to run, not wired into the game yet |
-| `supabase/multiplayer.sql` | Public company profiles for the globe, staking between players, guild pools, realtime | Ready to run after `schema.sql`, not wired in yet |
+| `supabase/schema.sql` | Cloud saves with anti-cheat, guilds, leaderboards, RLS | **Applied** to the live project (run order: schema → multiplayer → 003); game not wired to it yet |
+| `supabase/multiplayer.sql` | Public company profiles for the globe, staking between players, guild pools, realtime | **Applied** to the live project |
+| `supabase/003_public_stats_invoker_views.sql` | Public stats on profiles; all public views respect row-level security | **Applied** to the live project |
 
 ## Game systems (all in `index.html`)
 
