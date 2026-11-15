@@ -319,7 +319,7 @@ const EVENTS = [
   { id:'mania', w:2, ok:()=>true, start(){ S.ev.mania={until:S.block+45}; log('🐸 Meme-coin mania! Network fees ×3.', 'good'); } },
   { id:'scare', w:1.5, ok:()=>S.deleg>0, start(){ const p = S.rep>80?0.05:0.15; const lost = S.deleg*p; S.deleg -= lost; S.ev.scare={until:S.block+10}; log(`🌉 Bridge exploit scare: stakers pulled ${fmt(lost)}.`, 'bad'); } },
   { id:'upgrade', w:1, ok:()=>S.nodes.length>=2 && !S.ev.upgrade && !S.outOfSync, start(){ S.ev.upgrade={until:S.block+60, deadline:S.block+60, start:S.block}; log('🛠️ Network upgrade! Patch your nodes within 60 blocks.', 'warn'); } },
-  { id:'whale', w:1, ok:()=>capacity()-totalStake() >= 2*VSTAKE && S.whaleStake===0 && !S.pendingWhale, start(){ S.pendingWhale={expires:S.block+30}; log('🐋 A whale wants to stake 64M with you.', 'warn'); showWhale(); } },
+  { id:'whale', w:1, ok:()=>capacity()-totalStake() >= 2*VSTAKE && S.whaleStake===0 && !S.pendingWhale, start(){ S.pendingWhale={expires:S.block+30}; log('🐋 Maximus Vane, a crypto whale, wants to stake 64M with you.', 'warn'); showWhale(); } },
   { id:'bear', w:1, ok:()=>true, start(){ S.ev.bear={until:S.block+60}; log('🐻 Bear market. Prices crash. Hardware auction: nodes 50% off!', 'warn'); bearBusts(); } },
   { id:'ddos', w:1.2, ok:()=>rt.k>0, start(){ S.ev.ddos={until:S.block+40}; log(S.fac.ddos ? '🛡️ DDoS attack on your nodes — filtered by your DDoS protection.' : '🌊 DDoS attack! Validators are missing blocks. DDoS protection stops this.', S.fac.ddos?'good':'bad'); } },
   { id:'breakin', w:0.8, ok:()=>!isDay() && S.nodes.length>1, start(){ breakIn(); } },
@@ -512,7 +512,7 @@ function tick(){
   if (Object.keys(S.dels).length >= 3) award('networker');
   if (S.block >= S.seasonEnd){
     const rank = leaderboard().findIndex(x=>x.me) + 1;
-    log(`🏁 Season ${S.season} ended. You finished #${rank}.`, rank<=3?'good':'');
+    log(`🏁 Season ${S.season} ended. You finished #${rank}. Rival CEO Victor Crane stopped by to gloat.`, rank<=3?'good':'');
     S.season++; S.seasonEnd = S.block + 3600; scene3.rivalVisits();
   }
 
@@ -647,7 +647,7 @@ window.addEventListener('pointerup', () => { if (uiHold){ uiHold = false; } });
 function showModal(html){ $('#mbox').innerHTML = html; $('#modal').classList.add('on'); }
 function closeModal(){ $('#modal').classList.remove('on'); }
 function showWhale(){
-  showModal(`<h2>🐋 A whale appears</h2><p>A big holder wants to stake <b>64M</b> with you, filling two validators. Their share pays you your ${(S.commission*100).toFixed(0)}% commission.</p><p>The catch: for the next 150 blocks, your downtime must stay under 2%. If it doesn't, they leave and tell everyone (−15 reputation). Get slashed and they leave at once.</p><div class="btns"><button class="btn" data-act="whaleYes">Accept the whale</button><button class="btn ghost" data-act="whaleNo">No thanks</button></div>`);
+  showModal(`<h2>🐋 A whale appears</h2><p><b>Maximus Vane</b>, a big crypto holder, wants to stake <b>64M</b> with you, filling two validators. Their share pays you your ${(S.commission*100).toFixed(0)}% commission.</p><p>The catch: for the next 150 blocks, your downtime must stay under 2%. If it doesn't, they leave and tell everyone (−15 reputation). Get slashed and they leave at once.</p><div class="btns"><button class="btn" data-act="whaleYes">Accept the whale</button><button class="btn ghost" data-act="whaleNo">No thanks</button></div>`);
 }
 function showHelp(){
   showModal(`<h2>How to play</h2>
@@ -696,7 +696,7 @@ function makeCompany(name, cityIdx, nw){
     nw, g:rand(0.00025,0.0007), rep:rand(45,95), comm:[0.03,0.05,0.07,0.08,0.10,0.12][randi(0,5)], guild:null, down:0, slashed:0, joined:S ? S.block : 0 };
 }
 function randomCompany(){
-  const ci = randi(0, CITIES.length-1); const word = CITIES[ci][0].split(' ')[0];
+  const ci = randi(0, CITIES.length-1), cn = CITIES[ci][0], first = cn.split(' ')[0]; const word = (first.length <= 4 || first === 'Buenos') && cn.includes(' ') ? cn : first;
   return makeCompany(`${word} ${CO_SUFFIX[randi(0, CO_SUFFIX.length-1)]}`, ci, Math.exp(rand(Math.log(5e6), Math.log(2e9))));
 }
 function makeWorld(){
@@ -728,8 +728,8 @@ const delegatedTotal = () => Object.values(S.dels).reduce((a,b)=>a+b, 0);
 // NET: the only place other players are read or changed. Simulated today.
 const NET = {
   get mode(){ return online.user ? 'online' : 'simulated'; },
-  companies(){ return online.user ? W().companies.concat(online.realCos) : W().companies; },
-  guilds(){ return online.user ? W().guilds.concat(online.realGuilds) : W().guilds; },
+  companies(){ return online.user ? online.realCos : W().companies; },
+  guilds(){ return online.user ? online.realGuilds : W().guilds; },
   delegate(id, amt){ S.dels[id] = (S.dels[id]||0) + amt; },
   undelegate(id, amt){ S.dels[id] = Math.max(0, (S.dels[id]||0) - amt); if (S.dels[id] < 1) delete S.dels[id]; },
   joinGuild(id){ S.guildId = id; },
@@ -738,9 +738,9 @@ const NET = {
 };
 
 function worldTick(){
-  const w = W(), bear = active('bear');
+  const w = W(), bear = active('bear'), sim = !online.user;   // signed in: no computer-run companies
   // companies grow (or shrink in a bear market)
-  w.companies.forEach(c => {
+  if (sim) w.companies.forEach(c => {
     const g = bear ? (c.rep < 55 ? -0.0012 : -0.0002) : c.g;
     c.nw = Math.max(2e6, c.nw * (1 + g*rand(0.5,1.5)));
     c.rep = clamp(c.rep + (coOnline(c) ? 0.01 : -0.08), 5, 100);
@@ -761,11 +761,11 @@ function worldTick(){
     const city = CITIES[randi(0, CITIES.length-1)][0], hit = w.companies.filter(c => c.city === city);
     const dur = randi(20, 50); w.cityDown = w.cityDown || {}; w.cityDown[city] = S.block + dur;
     const myFarm = S.farms.find(f => f.city === city); if (myFarm) log(`🛰️ Grid outage in ${city} took your farm there offline.`, 'bad');
-    if (hit.length){ hit.forEach(c => { c.down = S.block + randi(20, 50); pulses.push({ id:c.id, kind:'down' }); });
+    if (sim && hit.length){ hit.forEach(c => { c.down = S.block + randi(20, 50); pulses.push({ id:c.id, kind:'down' }); });
       log(`🌍 Grid outage in ${city}: ${hit.length} compan${hit.length>1?'ies':'y'} offline.`, hit.some(c => S.dels[c.id] || c.guild === S.guildId) ? 'warn' : ''); }
   }
   // new companies join
-  if (S.block >= w.nextJoin){
+  if (sim && S.block >= w.nextJoin){
     w.nextJoin = S.block + randi(60, 150);
     if (w.companies.length < 90){
       const c = randomCompany(); if (!w.companies.some(x => x.name === c.name)){
@@ -776,7 +776,7 @@ function worldTick(){
     }
   }
   // your own guild attracts members
-  const mine = guild('g_me');
+  const mine = sim && guild('g_me');
   if (mine && S.block % 40 === 0 && Math.random() < 0.15 + S.rep/250 + Math.min(0.3, S.guildStake/1e9)){
     const free = w.companies.filter(c => !c.guild); const c = free[randi(0, free.length-1)];
     if (c){ c.guild = 'g_me'; log(`🤝 ${c.name} (${c.city}) joined your guild ${mine.name}!`, 'good'); }
@@ -784,6 +784,7 @@ function worldTick(){
 }
 // bear market: weak companies go bust, their hardware goes to auction
 function bearBusts(){
+  if (online.user) return;
   const w = W(); const weak = w.companies.filter(c => c.rep < 60).sort((a,b) => a.nw - b.nw).slice(0, randi(1,2));
   weak.forEach(c => {
     w.companies = w.companies.filter(x => x !== c);
@@ -880,6 +881,18 @@ async function authDo(kind){
     closeModal(); await afterSignIn();
   } catch (e) { authMsg(e.message || String(e)); }
 }
+// Signed-in players only deal with real players: return any stakes with computer-run companies and leave computer-run guilds.
+function dropBotLinks(){
+  let n = 0;
+  for (const [k, amt] of Object.entries(S.dels)) if (!isReal(k)){ if (amt > 0) S.unbonding.push({ amount:amt, at:S.block + UNBOND_BLOCKS }); delete S.dels[k]; n++; }
+  if (S.guildId && !isRealGuild(S.guildId)){
+    if (S.guildStake > 0) S.unbonding.push({ amount:S.guildStake, at:S.block + UNBOND_BLOCKS });
+    if (S.guildId === 'g_me' && S.world){ S.world.companies.forEach(c => { if (c.guild === 'g_me') c.guild = null; }); S.world.guilds = S.world.guilds.filter(g => g.id !== 'g_me'); }
+    S.guildId = null; S.guildStake = 0; n++;
+  }
+  if (ui.sel && !isReal(ui.sel)) ui.sel = null;
+  if (n) log('☁️ Online you only deal with real players: stakes with computer-run companies and guilds are being returned (unbonding).', 'warn');
+}
 async function afterSignIn(){
   online.status = 'connecting'; render(true);
   try {
@@ -896,6 +909,7 @@ async function afterSignIn(){
       S = freshState({ seenHelp:true }); ensureWorld(); selected = -1; scene3.full(); log('☁️ New account: starting a fresh company.', 'good');
     }
     S.owner = me;
+    dropBotLinks();
     online.status = 'online';
     await cloudSync(true);
     clearInterval(online.timer); online.timer = setInterval(() => cloudSync(), CLOUD.syncEvery);
@@ -915,7 +929,7 @@ async function cloudSync(force = false){
   online.busy = true;
   try {
     const me = uid(), sb = online.sb;
-    S.owner = me; S.lastSave = Date.now();
+    S.owner = me; S.lastSave = Date.now(); dropBotLinks();
     await cloudPush();
     const ci = CITIES.find(c => c[0] === S.city);
     const up = await sb.rpc('update_company', { p_name:S.company, p_city:S.city || null, p_lat:ci ? ci[2] : null, p_lon:ci ? ci[3] : null,
@@ -1128,7 +1142,7 @@ function tabCompany(){
   const g = forkGain();
   return `${accountSection()}<div class="sec"><h3>Company name</h3><input type="text" maxlength="28" value="${esc(S.company)}" data-input="name"></div>
   <div class="sec"><h3>Your CEO (sits at the desk)</h3><div class="btns">${scene3.CEO_CAST.map(k=>`<button class="btn sm ${S.ceo===k?'':'ghost'}" data-act="ceo" data-arg="${k}">${scene3.NAMES[k]}</button>`).join('')}</div></div>
-  <div class="sec"><h3>Season ${S.season} leaderboard · ends in ${S.seasonEnd - S.block} blocks</h3><div class="card">${lb}</div><div class="note">You're #${myRank+1} of ${full.length}. Ranked by net worth. ${online.user ? '👤 marks real players; the rest are computer-run companies.' : 'Other companies are computer-run. Sign in to compete with real players.'}</div></div>
+  <div class="sec"><h3>Season ${S.season} leaderboard · ends in ${S.seasonEnd - S.block} blocks</h3><div class="card">${lb}</div><div class="note">You're #${myRank+1} of ${full.length}. Ranked by net worth. ${online.user ? 'Everyone here is a real player.' : 'Other companies are computer-run. Sign in to compete with real players.'}</div></div>
   <div class="sec"><h3>Guild leaderboard</h3><div class="card">${gl}</div></div>
   <div class="sec"><h3>Hard Fork</h3><div class="card">
     <div class="kv"><span>Lifetime earnings</span><span>${fmt(S.lifetime)}</span></div>
@@ -1190,12 +1204,13 @@ function tabNetwork(){
   if (S.guildId && guild(S.guildId)) h += `<div class="sec"><h3>Your guild</h3>${guildCard(guild(S.guildId))}</div>`;
   else {
     const gs = NET.guilds().slice().sort((a,b)=>guildTotal(b)-guildTotal(a));
-    h += `<div class="sec"><h3>Join a guild</h3>${gs.map(g=>`<div class="card"><div class="row"><div><div class="name"><span style="color:#${g.color.toString(16).padStart(6,'0')}">●</span> ${esc(g.name)}</div><div class="desc">${guildMembers(g).length} members · ${guildVals(g)} validators · ${(g.fee*100).toFixed(0)}% fee</div></div><button class="btn sm" data-act="joinGuild" data-arg="${g.id}">Join</button></div></div>`).join('')}
+    h += `<div class="sec"><h3>Join a guild</h3>${gs.length ? '' : '<div class="note" style="margin-bottom:8px">No guilds yet. Found the first one and other players can join it.</div>'}${gs.map(g=>`<div class="card"><div class="row"><div><div class="name"><span style="color:#${g.color.toString(16).padStart(6,'0')}">●</span> ${esc(g.name)}</div><div class="desc">${guildMembers(g).length} members · ${guildVals(g)} validators · ${(g.fee*100).toFixed(0)}% fee</div></div><button class="btn sm" data-act="joinGuild" data-arg="${g.id}">Join</button></div></div>`).join('')}
       <div class="card"><div class="name">Found your own guild</div><div class="desc">Other companies join over time based on your reputation and how much you pool. As founder you collect a 5% fee.</div>
       <input type="text" id="gname" maxlength="32" placeholder="Guild name" data-input="gname" value="${esc(ui.gname)}" style="margin-top:6px"><div class="btns"><button class="btn sm" data-act="foundGuild" ${S.coins<GUILD_FOUND_COST?'disabled':''}>Found guild · ${fmt(GUILD_FOUND_COST)}</button></div></div></div>`;
   }
   const list = cos.slice().sort((a,b)=>b.nw-a.nw);
-  h += `<div class="sec"><h3>All companies</h3><input type="text" placeholder="Search name, city or country…" data-input="search" value="${esc(ui.search)}" style="margin-bottom:6px"><div class="card" id="codir">${list.map(x=>`<div class="lb" style="cursor:pointer" data-act="sel" data-arg="${x.id}" data-name="${esc((x.name+' '+x.city+' '+x.cc).toLowerCase())}" ${ui.search && !(x.name+' '+x.city+' '+x.cc).toLowerCase().includes(ui.search.toLowerCase())?'style="display:none"':''}><span>${FLAGS(x.cc)} ${x.real?'👤 ':''}${esc(x.name)} <span style="color:var(--dim)">${esc(x.city)}</span></span><span class="mono">${coVals(x)} val · ${(x.comm*100).toFixed(0)}%</span></div>`).join('')}</div></div>`;
+  if (!list.length) h += `<div class="sec"><h3>All companies</h3><div class="note">No other players are online yet. Share the game link with friends: they'll appear here and on the globe.</div></div>`;
+  else h += `<div class="sec"><h3>All companies</h3><input type="text" placeholder="Search name, city or country…" data-input="search" value="${esc(ui.search)}" style="margin-bottom:6px"><div class="card" id="codir">${list.map(x=>`<div class="lb" style="cursor:pointer" data-act="sel" data-arg="${x.id}" data-name="${esc((x.name+' '+x.city+' '+x.cc).toLowerCase())}" ${ui.search && !(x.name+' '+x.city+' '+x.cc).toLowerCase().includes(ui.search.toLowerCase())?'style="display:none"':''}><span>${FLAGS(x.cc)} ${x.real?'👤 ':''}${esc(x.name)} <span style="color:var(--dim)">${esc(x.city)}</span></span><span class="mono">${coVals(x)} val · ${(x.comm*100).toFixed(0)}%</span></div>`).join('')}</div></div>`;
   return h;
 }
 
@@ -1286,7 +1301,7 @@ const scene3 = (() => {
   const box = (w,h,d,mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat); m.castShadow = true; m.receiveShadow = true; return m; };
 
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(400,400), M(0x1c2a20));
-  ground.rotation.x = -Math.PI/2; ground.position.y = -0.21; ground.receiveShadow = true; scene.add(ground);
+  ground.rotation.x = -Math.PI/2; ground.position.y = -0.31; ground.receiveShadow = true; scene.add(ground);
 
   function tileTex(){
     const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
@@ -1326,7 +1341,7 @@ const scene3 = (() => {
     props.floorMat = M(0xffffff, { roughness:0.6 });
     const floor = new THREE.Mesh(new THREE.BoxGeometry(w, 0.2, d), [M(0x22252f),M(0x22252f),props.floorMat,M(0x22252f),M(0x22252f),M(0x22252f)]);
     floor.position.y = -0.1; floor.receiveShadow = true; room.add(floor);
-    const wallM = M(0x3b3550), trimM = M(0x26223a); props.wallM = wallM;
+    const wallM = M(0x3b3550), trimM = M(0x8d929c); props.wallM = wallM;
     const back = box(w+0.3, 3.4, 0.3, wallM); back.position.set(0, 1.7, -d/2-0.15); room.add(back);
     // left wall with a real doorway
     const dz = d/2 - 2.6, dw = 1.1, dh = 2.2; props.doorZ = dz;
@@ -1354,7 +1369,7 @@ const scene3 = (() => {
     }
     racks.forEach(r => r.g.removeFromParent()); racks = [];
     techs.forEach(t => t.g.removeFromParent()); techs = [];
-    buildProps(); buildFacility(); syncRacks(); syncTechs(); resetCast(); applyDecor();
+    buildCompound(); buildProps(); buildFacility(); syncRacks(); syncTechs(); resetCast(); applyDecor();
     fitCamera();
   }
 
@@ -1425,6 +1440,108 @@ const scene3 = (() => {
     P.bb.position.set(-w/4, 0, -d/2 - 2.5); room.add(P.bb);
     syncProps(true);
   }
+  // ---------- compound: the server room sits inside a building in a walled yard ----------
+  function compoundTex(kind){
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    if (kind === 'paving'){ g.fillStyle = '#9a9c9f'; g.fillRect(0,0,128,128);
+      for (let i = 0; i < 500; i++){ const v = 140 + Math.random()*25|0; g.fillStyle = `rgba(${v},${v},${v},.35)`; g.fillRect(Math.random()*128, Math.random()*128, 2, 2); }
+      g.strokeStyle = 'rgba(90,92,96,.7)'; g.lineWidth = 2; g.strokeRect(1,1,126,126); }
+    else if (kind === 'asphalt'){ g.fillStyle = '#2e3033'; g.fillRect(0,0,128,128); for (let i = 0; i < 700; i++){ const v = 40 + Math.random()*30|0; g.fillStyle = `rgb(${v},${v},${v+3})`; g.fillRect(Math.random()*128, Math.random()*128, 1.5, 1.5); } }
+    else { g.fillStyle = '#3c5a33'; g.fillRect(0,0,128,128); for (let i = 0; i < 900; i++){ g.fillStyle = `rgba(${60+Math.random()*40|0},${100+Math.random()*50|0},${40+Math.random()*20|0},.6)`; g.fillRect(Math.random()*128, Math.random()*128, 2, 3); } }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+  }
+  function buildCompound(){
+    const { w, d } = E, P = props;
+    const L = 4, R = 7.5, B = 4.8, F = 9;                  // yard margins around the building
+    const x0 = -w/2 - L, x1 = w/2 + R, z0 = -d/2 - B, z1 = d/2 + F, YW = x1 - x0, YD = z1 - z0, cx = (x0 + x1)/2, cz = (z0 + z1)/2;
+    const C = new THREE.Group(); room.add(C);
+    // yard paving + building plinth
+    const pv = compoundTex('paving'); pv.repeat.set(YW/1.5, YD/1.5); pv.generateMipmaps = true; pv.minFilter = THREE.LinearMipmapLinearFilter;
+    const yard = new THREE.Mesh(new THREE.BoxGeometry(YW, 0.1, YD), [M(0x6d7075),M(0x6d7075),M(0xffffff,{ map:pv, roughness:0.9 }),M(0x6d7075),M(0x6d7075),M(0x6d7075)]);
+    yard.position.set(cx, -0.25, cz); yard.receiveShadow = true; C.add(yard);
+    C.add(at(box(w + 0.9, 0.3, d + 0.9, M(0x4a4d55)), 0, -0.2, 0));
+    // building cutaway caps: concrete tops on the walls make the room read as a building section
+    const cap = M(0xb9bcc3);
+    C.add(at(box(w + 0.6, 0.14, 0.5, cap), 0, 3.47, -d/2 - 0.15));
+    C.add(at(box(0.5, 0.14, d + 0.6, cap), -w/2 - 0.15, 3.47, 0));
+    C.add(at(box(w + 0.6, 0.1, 0.42, cap), 0, 0.55, d/2 + 0.15));
+    C.add(at(box(0.42, 0.1, d + 0.6, cap), w/2 + 0.15, 0.55, 0));
+    // driveway from gate to the building, and a road outside
+    const as = compoundTex('asphalt');
+    const gx0 = w/2 + 1.2, gx1 = w/2 + 4.6;                // gate opening in the front wall
+    const drive = new THREE.Mesh(new THREE.PlaneGeometry(gx1 - gx0, F - 0.5), new THREE.MeshStandardMaterial({ map:as, roughness:0.95 }));
+    drive.rotation.x = -Math.PI/2; drive.position.set((gx0 + gx1)/2, -0.195, d/2 + 0.25 + (F - 0.5)/2); drive.receiveShadow = true; C.add(drive);
+    const road = new THREE.Mesh(new THREE.PlaneGeometry(200, 4), new THREE.MeshStandardMaterial({ map:as, roughness:0.95 })); as.repeat.set(1,1);
+    road.rotation.x = -Math.PI/2; road.position.set(0, -0.285, z1 + 3); road.receiveShadow = true; C.add(road);
+    for (let x = -60; x < 60; x += 3){ const ln = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.12), new THREE.MeshBasicMaterial({ color:0xd8d2b0 })); ln.rotation.x = -Math.PI/2; ln.position.set(x, -0.28, z1 + 3); C.add(ln); }
+    // perimeter wall (lower at the front/right so the yard stays visible) with razor wire
+    const wallM = M(0xd6cdb8), coping = M(0xa89f8a);
+    const seg = (ax, az, bx, bz, h) => { const len = Math.hypot(bx - ax, bz - az); if (len < 0.05) return;
+      const m = box(len, h, 0.22, wallM); m.position.set((ax + bx)/2, -0.2 + h/2, (az + bz)/2); m.rotation.y = -Math.atan2(bz - az, bx - ax); C.add(m);
+      const cp = box(len, 0.08, 0.3, coping); cp.position.set(m.position.x, -0.2 + h + 0.04, m.position.z); cp.rotation.y = m.rotation.y; C.add(cp);
+      wireRuns.push([ax, az, bx, bz, -0.2 + h + 0.2]); };
+    const wireRuns = [];
+    seg(x0, z0, x1, z0, 1.9); seg(x0, z0, x0, z1, 1.9);          // back + left: tall
+    seg(x1, z0, x1, z1, 1.1);                                     // right
+    seg(x0, z1, gx0, z1, 1.1); seg(gx1, z1, x1, z1, 1.1);         // front, with gate gap
+    let nw = 0; wireRuns.forEach(([ax, az, bx, bz]) => nw += Math.ceil(Math.hypot(bx - ax, bz - az)/0.35));
+    const wire = new THREE.InstancedMesh(new THREE.TorusGeometry(0.13, 0.012, 4, 10), new THREE.MeshStandardMaterial({ color:0xb8bcc4, metalness:0.9, roughness:0.3 }), nw);
+    const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(); let wi = 0;
+    wireRuns.forEach(([ax, az, bx, bz, y]) => { const len = Math.hypot(bx - ax, bz - az), n = Math.ceil(len/0.35), ang = Math.atan2(bz - az, bx - ax);
+      for (let i = 0; i < n; i++){ const t = (i + 0.5)/n; e.set(0, -ang + Math.PI/2, 0); q.setFromEuler(e); mtx.compose(new THREE.Vector3(ax + (bx-ax)*t, y, az + (bz-az)*t), q, new THREE.Vector3(1,1,1)); wire.setMatrixAt(wi++, mtx); } });
+    C.add(wire);
+    // gate: posts, sliding gate pushed open, boom barrier, guard booth
+    const steel = M(0x2b2e35, { metalness:0.6, roughness:0.4 });
+    for (const x of [gx0, gx1]) C.add(at(box(0.35, 1.5, 0.35, M(0xb3aa94)), x, 0.55, z1));
+    const gate = new THREE.Group(); gate.add(at(box(3.2, 0.06, 0.06, steel), 0, 1.0, 0)); gate.add(at(box(3.2, 0.06, 0.06, steel), 0, 0.1, 0));
+    for (let i = 0; i <= 12; i++) gate.add(at(box(0.04, 0.95, 0.04, steel), -1.6 + i*(3.2/12), 0.55, 0));
+    gate.position.set(gx0 - 1.75, -0.2, z1 - 0.3); C.add(gate);
+    const boom = new THREE.Group(); boom.add(at(box(0.3, 0.9, 0.3, M(0xd9d9d9)), 0, 0.45, 0));
+    const arm = new THREE.Group(); for (let i = 0; i < 6; i++) arm.add(at(box(0.5, 0.08, 0.08, M(i % 2 ? 0xd62828 : 0xffffff)), 0.25 + i*0.5, 0, 0));
+    arm.position.set(0.1, 0.85, 0); boom.add(arm); props.boomArm = arm;
+    boom.position.set(gx1 - 0.3, -0.2, z1 - 1.2); boom.rotation.y = Math.PI; C.add(boom);
+    const booth = new THREE.Group();
+    booth.add(at(box(1.5, 2.1, 1.5, M(0xe7e2d6)), 0, 1.05, 0)); booth.add(at(box(1.8, 0.12, 1.8, M(0x5a3d2b)), 0, 2.16, 0));
+    booth.add(at(new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.6, 0.02), new THREE.MeshStandardMaterial({ color:0x9fd8ff, emissive:0x1d3a52, transparent:true, opacity:0.8 })), 0, 1.4, 0.76));
+    booth.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.6, 1.0), new THREE.MeshStandardMaterial({ color:0x9fd8ff, emissive:0x1d3a52, transparent:true, opacity:0.8 })), -0.76, 1.4, 0));
+    booth.position.set(gx1 + 1.4, -0.2, z1 - 1.3); C.add(booth);
+    // company sign by the gate
+    P.gateSign = textPanel(512, 128);
+    const sign = new THREE.Group(); sign.add(at(box(0.1, 1.1, 0.1, steel), -0.9, 0.35, 0)); sign.add(at(box(0.1, 1.1, 0.1, steel), 0.9, 0.35, 0));
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.55), new THREE.MeshBasicMaterial({ map:P.gateSign.t })); board.position.set(0, 1.05, 0.06); sign.add(board); sign.add(at(box(2.3, 0.65, 0.08, M(0x15171d)), 0, 1.05, 0));
+    sign.position.set(gx0 - 1.8, -0.2, z1 + 0.35); C.add(sign); drawGateSign();
+    // parking bays with cars
+    const pxs = [-w/2 + 0.6, -w/2 + 2.6, -w/2 + 4.6], pz = d/2 + F - 3.0;
+    pxs.forEach(x => { const ln = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 2.6), new THREE.MeshBasicMaterial({ color:0xf2f2f2 })); ln.rotation.x = -Math.PI/2; ln.position.set(x - 1.0, -0.19, pz); C.add(ln); });
+    const car = (x, z, color, rot) => { const g = new THREE.Group(); const body = M(color, { metalness:0.6, roughness:0.35 });
+      g.add(at(box(0.95, 0.42, 2.05, body), 0, 0.33, 0)); g.add(at(box(0.85, 0.36, 1.1, M(0x1c2430, { metalness:0.3, roughness:0.15 })), 0, 0.7, -0.1));
+      for (const [wx, wz] of [[-0.45,-0.65],[0.45,-0.65],[-0.45,0.65],[0.45,0.65]]) g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.12, 12).rotateZ(Math.PI/2), M(0x111111)), wx, 0.17, wz));
+      g.position.set(x, -0.2, z); g.rotation.y = rot; C.add(g); };
+    car(-w/2 + 1.6, pz, 0xf2f2f2, 0.02); car(-w/2 + 3.6, pz, 0x1b3f8f, -0.03);
+    // trees and street lamps
+    const tree = (x, z, s = 1) => { const g = new THREE.Group(); g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.1*s, 0.14*s, 1.2*s, 7), M(0x5b3b22)), 0, 0.6*s, 0));
+      const leaf = M(0x2e6b32); [[0,1.6,0,0.75],[0.35,1.35,0.15,0.5],[-0.3,1.4,-0.2,0.55]].forEach(([lx,ly,lz,r]) => { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r*s, 1), leaf); m.position.set(lx*s, ly*s, lz*s); m.castShadow = true; g.add(m); });
+      g.position.set(x, -0.25, z); C.add(g); };
+    [[x0 - 1.5, z0 + 2], [x0 - 1.8, cz + 2], [x0 - 1.4, z1 - 1], [cx, z0 - 1.6], [x1 + 1.6, z0 + 3], [x1 + 1.8, cz + 3],
+     [x0 + 0.9, z1 - 0.9, 0.7], [x1 - 0.9, z1 - 0.9, 0.7], [-20, z1 + 6], [-8, z1 + 6.5], [6, z1 + 6.2], [18, z1 + 6.4]].forEach(([x, z, s]) => tree(x, z, s || 1));
+    P.lampBulbs = [];
+    [[x0 + 0.6, z1 - 3.5], [cx + 2, z1 - 0.6], [x1 - 0.6, cz], [x1 - 0.6, z0 + 1.2]].forEach(([x, z]) => {
+      const g = new THREE.Group(); g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 3.0, 8), steel), 0, 1.5, 0)); g.add(at(box(0.5, 0.06, 0.12, steel), 0.2, 3.0, 0));
+      const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, 0.12), new THREE.MeshBasicMaterial({ color:0x333333 })); bulb.position.set(0.38, 2.95, 0); g.add(bulb); P.lampBulbs.push(bulb);
+      g.position.set(x, -0.2, z); C.add(g); });
+    // grass verge just outside the wall (ground beyond stays the base grass)
+    const gr = compoundTex('grass'); gr.repeat.set(40, 40); ground.material.map = gr; ground.material.needsUpdate = true;
+    P.compound = C;
+  }
+  function drawGateSign(){
+    const P = props; if (!P.gateSign) return; const { c, t } = P.gateSign, g = c.getContext('2d');
+    g.fillStyle = '#15171d'; g.fillRect(0,0,512,128);
+    const gr = g.createLinearGradient(0,0,512,0); gr.addColorStop(0,'#ff3cac'); gr.addColorStop(.5,'#784ba0'); gr.addColorStop(1,'#2b86c5'); g.fillStyle = gr; g.fillRect(0,0,512,8); g.fillRect(0,120,512,8);
+    g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    let fs = 54; g.font = `bold ${fs}px sans-serif`; const txt = S.company.toUpperCase(); while (g.measureText(txt).width > 480 && fs > 20){ fs -= 2; g.font = `bold ${fs}px sans-serif`; }
+    g.fillText(txt, 256, 58); g.font = '20px sans-serif'; g.fillStyle = '#9aa3b8'; g.fillText('VALIDATOR FACILITY · AUTHORISED PERSONNEL ONLY', 256, 100); t.needsUpdate = true;
+  }
+
   function buildFacility(){
     const { w, d } = E, P = props, cols = Math.floor((w - 2)/1.3), rows = Math.ceil(E.slots / cols), rowW = cols*1.3;
     const rowZ = r => -d/2 + 1.5 + r*3, x0 = -w/2 + 1.5 - 0.65 + rowW/2;
@@ -1544,6 +1661,7 @@ const scene3 = (() => {
     P.acs.forEach((a,i) => a.visible = i < S.cooling);
     P.bb.visible = S.marketing > 0; P.bb.scale.setScalar(0.8 + S.marketing*0.06);
     if (redrawBB || S.marketing > 0) drawBillboard();
+    if (redrawBB) drawGateSign();
     if (P.raised){ P.raised.visible = !!S.fac.raised; P.contain.visible = !!S.fac.contain; P.cabling.visible = !!S.fac.cabling;
       P.cracs.forEach((c,i) => c.visible = i < (S.crac||0)); P.fire.visible = !!S.fac.fire; P.sec.visible = !!S.fac.security; P.noc.visible = !!S.fac.noc;
       if (S.decor && S.decor.props.sign && redrawBB) drawSign(); }
@@ -1594,7 +1712,7 @@ const scene3 = (() => {
   // (e.g. the page is opened without its asset files) the simple procedural figures are used instead.
   const TECH_CAST = ['pete','lewis','alex','elizabeth'];
   const CEO_CAST = ['martha','louise','joe','suzie'];
-  const NAMES = { pete:'Pete', lewis:'Lewis', alex:'Alex', elizabeth:'Elizabeth', martha:'Martha', louise:'Louise', joe:'Joe', suzie:'Suzie', josh:'Josh', leonard:'Leonard', bryce:'Bryce', remy:'Remy' };
+  const NAMES = { pete:'Bogdan', lewis:'Kwame', alex:'Diego', elizabeth:'Amara', martha:'Mei', louise:'Zainab', joe:'Daniel', suzie:'Priya', josh:'Maximus Vane', leonard:'Victor Crane', bryce:'Kai', remy:'Lars' };
   const gltfLoader = new GLTFLoader(); gltfLoader.setMeshoptDecoder(MeshoptDecoder);
   const modelCache = {}; let CLIPS = null, castOK = true;
   const castStatus = { loading:0, loaded:0 };
@@ -1913,7 +2031,7 @@ const scene3 = (() => {
   // ---------- animate ----------
   const clock = new THREE.Clock();
   const cNight = new THREE.Color(0x0a0c1a), cDay = new THREE.Color(0x6f93c4), cDusk = new THREE.Color(0xd77a55), tmpC = new THREE.Color();
-  const gNight = new THREE.Color(0x0e1712), gDay = new THREE.Color(0x3d5a37);
+  const gNight = new THREE.Color(0x2a3a2c), gDay = new THREE.Color(0xa9c99a);
   let dayV = 1, smokeT = 0;
   function animate(){
     requestAnimationFrame(animate);
@@ -1942,6 +2060,7 @@ const scene3 = (() => {
     if (props.door){ const dx = -E.w/2, dz = props.doorZ;
       const near = npcs.some(n => !n.pending && n.g && Math.hypot(n.g.position.x - dx, n.g.position.z - dz) < 1.8);
       props.doorOpen += ((near ? 1.35 : 0) - props.doorOpen) * Math.min(1, dt*6); props.door.rotation.y = props.doorOpen; }
+    if (props.lampBulbs) props.lampBulbs.forEach(b => b.material.color.setHex(dayV < 0.35 ? 0xfff1c4 : 0x444444));
     if (props.camLeds) props.camLeds.forEach(l => l.material.color.setHex(Math.sin(t*4) > 0 ? 0xff2030 : 0x330608));
     if (props.fireLed && props.fire.visible) props.fireLed.material.color.setHex(rt.heatRatio > 1 ? (Math.sin(t*8) > 0 ? 0xff2030 : 0x440508) : 0x3cf29a);
     if (props.noc && props.noc.visible && Math.floor(t*2) !== props.lastNoc){ props.lastNoc = Math.floor(t*2); drawNoc(); }

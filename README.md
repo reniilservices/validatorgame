@@ -33,6 +33,7 @@ A 3D isometric idle/tycoon game about running a staking company on a PulseChain-
 - **New nodes:** ARM Efficiency Node (heat 1, half power) and Liquid-Cooled Dual Rig (2 validators per rack, Data Hall and up). Validators are now counted in *slots*.
 - **Server farms:** up to 5 remote sites in other cities (Colocation Cage 4 slots → Edge Farm 12 → Hyperscale Hall 40). They keep running when HQ power/internet fails but go down in their own city's grid outages; hosting fee per slot. Shown on the globe with dashed links to HQ.
 - **Design tab:** floors (dark tiles, data-centre white, epoxy, oak, carbon, neon hex), wall colours, accent lights (incl. rainbow), rack paint, lighting mood, plus decorations: neon company sign, plants, coffee corner, trophy shelf (a cup per badge). Paid once, kept across Hard Forks.
+- **Compound:** the room sits on a building plinth inside a walled yard: perimeter wall with razor wire, gate with boom barrier and guard booth, company sign at the gate, driveway, parking with cars, street lamps (lit at night), trees and a road.
 - **Door:** real doorway in the left wall; the door swings open when visitors, the whale or the rival walk through.
 - **Validator world (simulated):** 32 starting companies in 46 real cities (6 in Nigeria), growing to 90 as new ones join. They grow, propose blocks, get slashed, go offline in regional grid outages, and the weakest go bust in bear markets.
 - **Staking with other companies:** put spare coins with any company; earn while they're online, minus their commission (60% of what your own validator would make). If they're slashed you lose 3%; if they go bust your stake is returned. 60-block unbonding.
@@ -47,6 +48,7 @@ The game connects to the Supabase project `ieiluyjwhpjzofvasyck` (URL and publis
 
 - **Sign-in:** email + password, or **Play as guest** (anonymous). Guests can attach an email later in the Company tab. **Play offline** skips the server entirely.
 - **Cloud saves:** every 30 seconds and when the tab is hidden, via `submit_save` (rejects impossible progress). On sign-in the newer of cloud/local save wins; another account's local save is never uploaded.
+- **Signed in = real players only:** the computer-run companies and guilds are hidden online (stakes with them are returned via unbonding). Offline play keeps the computer-run world.
 - **Real players:** your company profile (name, chosen city, validators, reputation, commission, online) is published via `update_company`. Real players appear on the globe (white or guild-coloured pins), in the company list and on the leaderboard with 👤, alongside the computer-run companies.
 - **Staking with real players:** `delegate` / `undelegate` run on the server first (coins checked there). Real players staking with *you* add to your total stake and pay you commission.
 - **Real guilds:** found (5M coins), join, pool, withdraw and leave; pool changes go through `guild_pool`. Bot guilds still work locally.
@@ -72,7 +74,7 @@ Drop the folder into a Vercel project (framework: "Other"). No build command nee
 
 ## Next steps
 
-1. **Cast (done):** technicians Pete, Lewis, Alex, Elizabeth (hired in that order); CEO at the desk (Martha, Louise, Joe or Suzie, picked in the Company tab); the Whale (Josh, with sunglasses and a gold chain added in code); rival CEO Leonard at season end; visitors Bryce and Remy; Pete digging outside during fibre cuts. Characters only download when they first appear. If the asset files are missing, the game falls back to simple figures.
+1. **Cast (done):** technicians Bogdan, Kwame, Diego, Amara (hired in that order); CEO at the desk (Mei, Zainab, Daniel or Priya, picked in the Company tab); the whale Maximus Vane (sunglasses and gold chain added in code); rival CEO Victor Crane at season end; visitors Kai and Lars; Bogdan digging during fibre cuts. Display names are original; the model files keep their source names (`chars/pete.glb` etc.). Characters only download when they first appear. If the asset files are missing, the game falls back to simple figures.
    - To add a character: convert the Mixamo FBX with `FBX2glTF --binary`, then `gltf-transform optimize in.glb chars/<name>.glb --texture-compress webp --texture-size 512 --compress meshopt`, and add its key to the cast lists in `index.html`.
    - Bone names are normalised in code (`mixamorig:`, `mixamorig1:` … all become plain names), and each character's hip height is scaled so every animation fits every rig.
 2. **Supabase:** run `schema.sql`, add Supabase Auth, and call `submit_save(state)` every 30s instead of `localStorage`. Compute offline earnings server-side.
