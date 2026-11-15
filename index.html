@@ -107,6 +107,10 @@
     .brand small{display:none}
     .hide-m{display:none}
   }
+  #modal a:not(.btn), #pbody .note a{color:#7fc4ff}
+  .wlist{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+  .wbtn{display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left}
+  .wbtn img{width:22px;height:22px;border-radius:5px}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
@@ -228,6 +232,9 @@ const BADGES = [
   ['forked','Forked','Complete your first Hard Fork'],
   ['guild','Guild Member','Join or found a guild'],
   ['networker','Networker','Stake with 3 other companies at once'],
+  ['mainnet','Mainnet Operator','Link a real PulseChain validator you run'],
+  ['backer','Real Backer','Back 32M+ PLS on real PulseChain validators'],
+  ['coop','Co-op Validator','Help your guild launch a real validator'],
 ];
 
 /* =========================================================
@@ -436,7 +443,7 @@ function tick(){
   const k = Math.min(slots.length, Math.floor(ts / VSTAKE)); rt.k = k;
   const ddos = active('ddos') && !S.fac.ddos;
   const feeMult = active('mania') ? 3 : 1;
-  const mult = forkMult() * (liveBonus > 0 ? 1.1 : 1);
+  const mult = forkMult() * (liveBonus > 0 ? 1.1 : 1) * realMult();
   if (liveBonus > 0) liveBonus--;
   let reward = 0, online = 0, offline = 0, fees = 0;
   for (let j = 0; j < k; j++){
@@ -589,16 +596,28 @@ const actions = {
       if (!ok) return; spend(GUILD_FOUND_COST); ui.gname = '';
       log(`🛡️ You founded ${name}! Real players can now find it and join.`, 'good'); globe.refresh(); render(true); return; }
     if (!spend(GUILD_FOUND_COST)) return; NET.foundGuild(name); log(`🛡️ You founded ${name}! Companies will start joining.`, 'good'); globe.refresh(); },
-  authIn(){ authDo('in'); }, authUp(){ authDo('up'); }, authGuest(){ authDo('guest'); },
-  authOffline(){ try { localStorage.setItem('vt_offline', '1'); } catch(e){} closeModal(); log('Playing offline. Sign in any time from the Company tab.'); },
+  authWallet(id){ signInWallet(id); }, authGuest(){ authDo('guest'); },
+  authOffline(){ try { localStorage.setItem('vt_offline', '1'); } catch(e){} ui.authOpen = false; closeModal(); log('Playing offline. Sign in any time from the Company tab.'); },
   authOpen(){ showAuth(); },
-  async authOut(){ await cloudSync(true); clearInterval(online.timer); await online.sb.auth.signOut(); online.user = null; online.status = 'signedout'; online.realCos = []; online.realGuilds = []; online.realDeleg = 0;
+  async authOut(){ await cloudSync(true); clearInterval(online.timer); await online.sb.auth.signOut(); online.user = null; online.status = 'signedout'; online.realCos = []; online.realGuilds = []; online.realDeleg = 0; Object.assign(real, realEmpty());
     for (const k of Object.keys(S.dels)) if (isReal(k)) delete S.dels[k]; if (isRealGuild(S.guildId)){ S.guildId = null; S.guildStake = 0; }
     log('Signed out. Your progress is saved in the cloud.'); render(true); globe.refresh(); },
-  async authLink(){ const email = (document.getElementById('lk_email')?.value || '').trim(), password = document.getElementById('lk_pass')?.value || '';
-    if (!email || password.length < 6) return log('Enter an email and a password of at least 6 characters.', 'warn');
-    const r = await online.sb.auth.updateUser({ email, password }); if (r.error) return log(`Could not save the account: ${r.error.message}`, 'bad');
-    log('✉️ Check your email to confirm it. Your guest progress now belongs to this account.', 'good'); render(true); },
+  realLink(){ const ids = (document.getElementById('rv_ids')?.value || '').split(/[\s,;]+/).filter(Boolean); if (!ids.length) return log('Enter your validator numbers first.', 'warn'); realCall('link', { ids }); },
+  realFind(){ realCall('discover'); }, realRefresh(){ realCall('refresh'); },
+  realUnlink(i){ realCall('unlink', { ids:[i] }); },
+  realGuide(){ showRealGuide(); },
+  async projNew(){ const name = (document.getElementById('pj_name')?.value || '').trim(); const g = guild(S.guildId);
+    if (!g || !g.real) return; if (name.length < 3) return log('Give the project a name (3+ letters).', 'warn');
+    const r = await online.sb.from('guild_projects').insert({ guild_id:g.uuid, name, operator_id:uid() });
+    if (r.error) return log(`Could not start the project: ${r.error.message}`, 'bad'); log(`🧱 Validator project "${name}" started. You are its operator.`, 'good'); realLoad(true); },
+  async projPledge(id){ const el = document.getElementById('pp_' + id), amt = Math.round(parseFloat((el?.value || '').replace(/[, ]/g, '')) * 1e6);
+    if (!(amt > 0)) return log('Enter a pledge in millions of PLS, e.g. 4 for 4M.', 'warn');
+    const r = await online.sb.from('guild_pledges').upsert({ project_id:id, player_id:uid(), amount_pls:amt, updated_at:new Date().toISOString() });
+    if (r.error) return log(`Pledge failed: ${r.error.message}`, 'bad'); log(`🤝 Pledged ${fmt(amt)} PLS. Nothing is sent: coordinate the real transfer with your operator.`, 'good'); realLoad(true); },
+  async projUnpledge(id){ const r = await online.sb.from('guild_pledges').delete().eq('project_id', id).eq('player_id', uid());
+    if (r.error) return log(`Could not withdraw the pledge: ${r.error.message}`, 'bad'); realLoad(true); },
+  projLink(id){ const v = (document.getElementById('pl_' + id)?.value || '').split(/[\s,;]+/).filter(Boolean); if (!v.length) return log('Enter the validator number.', 'warn'); realCall('link', { ids:v, project_id:id }); },
+  async projClose(id){ const r = await online.sb.from('guild_projects').delete().eq('id', id); if (r.error) return log(r.error.message, 'bad'); realLoad(true); },
   syncNow(){ cloudSync(true).then(() => log(online.status === 'online' ? '☁️ Synced.' : `☁️ Sync failed: ${online.err}`, online.status === 'online' ? 'good' : 'bad')); },
   fac(a){ const F = FACILITY[a]; if (!F || S.fac[a]) return; if (F.req && !(S[F.req] || S.fac[F.req])) return; if (!spend(F.cost)) return; S.fac[a] = true; log(`🏗️ Installed ${F.name}.`, 'good'); scene3.syncProps(); },
   crac(){ if ((S.crac||0) >= CRAC_MAX || !spend(cracCost())) return; S.crac = (S.crac||0) + 1; log('❄️ Installed a precision CRAC cooling unit.'); scene3.syncProps(); },
@@ -644,8 +663,8 @@ window.addEventListener('pointerup', () => { if (uiHold){ uiHold = false; } });
 /* =========================================================
    MODALS
    ========================================================= */
-function showModal(html){ $('#mbox').innerHTML = html; $('#modal').classList.add('on'); }
-function closeModal(){ $('#modal').classList.remove('on'); }
+function showModal(html){ $('#mbox').innerHTML = html; $('#modal').classList.add('on'); ui.authOpen = false; }
+function closeModal(){ $('#modal').classList.remove('on'); ui.authOpen = false; }
 function showWhale(){
   showModal(`<h2>🐋 A whale appears</h2><p><b>Maximus Vane</b>, a big crypto holder, wants to stake <b>64M</b> with you, filling two validators. Their share pays you your ${(S.commission*100).toFixed(0)}% commission.</p><p>The catch: for the next 150 blocks, your downtime must stay under 2%. If it doesn't, they leave and tell everyone (−15 reputation). Get slashed and they leave at once.</p><div class="btns"><button class="btn" data-act="whaleYes">Accept the whale</button><button class="btn ghost" data-act="whaleNo">No thanks</button></div>`);
 }
@@ -657,6 +676,7 @@ function showHelp(){
   <p>Upgrade your room like a real data center (raised floor, aisle containment, fire suppression, security) and open <b>server farms</b> in other cities in the Build tab. Make it yours in the <b>Design</b> tab.</p>
   <p>In the <b>Network</b> tab, put your company on the world map, stake spare coins with other companies, or join a <b>guild</b>: members pool stake, and every 32M pooled runs a shared validator.</p>
   <p>Earn 1B lifetime to <b>Hard Fork</b>: restart with permanent bonuses. Drag to pan, scroll or pinch to zoom, click a rack to manage it.</p>
+  <p>⛓️ <b>Run a real PulseChain validator?</b> Connect your wallet and link it in the Company tab: its real status shows on your company and keeps paying in-game bonuses while it stays healthy.</p>
   <div class="btns"><button class="btn" data-act="closeModal">Start validating</button></div>
   <p class="note" style="margin-top:12px">All coins and items are fictional and have no real-world value. <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a></p>`);
 }
@@ -829,8 +849,10 @@ function networkIncome(){
 const CLOUD = {
   url: 'https://ieiluyjwhpjzofvasyck.supabase.co',
   key: 'sb_publishable_wR20VuTCHR6BFZS_gPT-SQ_afKTCEuU',          // publishable key: safe in a web page
-  lib: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm',
+  lib: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/+esm',
   syncEvery: 30_000,
+  // Optional: a free WalletConnect (Reown) project ID adds a "WalletConnect" QR option for phone wallets.
+  wcProjectId: '',
 };
 const online = { sb:null, user:null, status:'starting', err:'', realCos:[], realGuilds:[], realDeleg:0, myPoolServer:0, timer:null, busy:false, warned:false };
 const isReal = id => typeof id === 'string' && id.startsWith('p_');
@@ -857,36 +879,86 @@ async function cloudStart(){
   else { let off = false; try { off = localStorage.getItem('vt_offline') === '1'; } catch(e){}
     if (!off){ while (document.getElementById('modal').classList.contains('on')) await new Promise(r => setTimeout(r, 400)); showAuth(); } }
 }
+/* ---------- wallet sign-in (Sign-In with Ethereum on PulseChain; no email, no password) ---------- */
+const PULSECHAIN = { chainId:'0x171', chainName:'PulseChain', nativeCurrency:{ name:'Pulse', symbol:'PLS', decimals:18 },
+  rpcUrls:['https://rpc.pulsechain.com'], blockExplorerUrls:['https://scan.pulsechain.com'] };
+const wallets = new Map();
+addEventListener('eip6963:announceProvider', e => { const d = e.detail; if (d && d.info && d.provider){ wallets.set(d.info.uuid || d.info.rdns || d.info.name, d); if (ui.authOpen) showAuth(); } });
+try { dispatchEvent(new Event('eip6963:requestProvider')); } catch(e){}
+function walletChoices(){
+  const list = [...wallets.values()].map(w => ({ id:w.info.uuid || w.info.rdns || w.info.name, name:w.info.name, icon:w.info.icon, provider:w.provider }));
+  if (!list.length && window.ethereum) list.push({ id:'injected', name:'Browser wallet', icon:'', provider:window.ethereum });
+  if (CLOUD.wcProjectId) list.push({ id:'walletconnect', name:'WalletConnect (phone wallet)', icon:'' });
+  return list;
+}
+const shortAddr = a => a ? a.slice(0, 6) + '…' + a.slice(-4) : '';
+function walletOfUser(u){
+  if (!u || u.is_anonymous) return null;
+  const m = JSON.stringify([u.identities, u.user_metadata, u.app_metadata]).match(/0x[0-9a-fA-F]{40}/);
+  return m ? m[0].toLowerCase() : null;
+}
+const isWalletUser = () => !!walletOfUser(online.user);
 function showAuth(msg = ''){
   if (!online.sb){ showModal(`<h2>Online play isn't available here</h2><p>This copy can't reach the game server (the claude.ai preview blocks it). Play on the published site to sign in.</p><div class="btns"><button class="btn" data-act="closeModal">OK</button></div>`); return; }
+  const ws = walletChoices();
+  const btns = ws.map(w => `<button class="btn wbtn" data-act="authWallet" data-arg="${esc(w.id)}">${/^data:image\//.test(w.icon || '') ? `<img src="${esc(w.icon)}" alt="">` : '🔐'} ${esc(w.name)}</button>`).join('');
   showModal(`<h2>Play online</h2>
-    <p>Sign in to save in the cloud, appear on the world map, stake with real players and join real guilds.</p>
-    <input type="email" id="au_email" placeholder="Email" autocomplete="email" style="margin-top:6px">
-    <input type="password" id="au_pass" placeholder="Password (6+ characters)" autocomplete="current-password" style="margin-top:6px">
-    <div class="btns"><button class="btn" data-act="authIn">Sign in</button><button class="btn ghost" data-act="authUp">Create account</button></div>
+    <p>Connect your PulseChain wallet to save in the cloud, appear on the world map, stake with real players, join real guilds and link the real validators you run.</p>
+    <div class="wlist">${btns || '<div class="desc">No wallet found in this browser. Install a wallet extension (for example Internet Money, Rabby or MetaMask), or open this page in your wallet app\'s built-in browser.</div>'}</div>
+    <p class="note">Signing in only asks your wallet to sign a message. It is free, sends no transaction and moves no funds. We never see your keys.</p>
     <div class="btns" style="margin-top:10px"><button class="btn ghost" data-act="authGuest">Play as guest</button><button class="btn ghost" data-act="authOffline">Play offline</button></div>
     <p id="au_msg" style="color:${msg.startsWith('✓')?'var(--good)':'var(--bad)'};min-height:1em">${esc(msg)}</p>
-    <p class="note">Guests can add an email later in the Company tab to keep their progress.</p>
+    <p class="note">Guests can connect a wallet later in the Company tab and keep their progress.</p>
     <p class="note">By playing online you agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>`);
+  ui.authOpen = true;
 }
-const authVals = () => ({ email:(document.getElementById('au_email')?.value || '').trim(), password:document.getElementById('au_pass')?.value || '' });
 const authMsg = m => { const el = document.getElementById('au_msg'); if (el){ el.textContent = m; el.style.color = m.startsWith('✓') ? 'var(--good)' : 'var(--bad)'; } };
-async function authDo(kind){
+async function walletConnectProvider(){
+  const { EthereumProvider } = await withTimeout(import('https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2/+esm'), 20000);
+  const p = await EthereumProvider.init({ projectId:CLOUD.wcProjectId, chains:[369], optionalChains:[1], showQrModal:true,
+    rpcMap:{ 369:'https://rpc.pulsechain.com', 1:'https://ethereum-rpc.publicnode.com' },
+    metadata:{ name:'Validator Tycoon', description:'Run a PulseChain validator company', url:location.origin, icons:[] } });
+  await p.connect(); return p;
+}
+async function switchChain(prov, hex){
+  try { await prov.request({ method:'wallet_switchEthereumChain', params:[{ chainId:hex }] }); return true; }
+  catch (e) { if (hex === '0x171' && (e.code === 4902 || /unrecognized|not added|unknown chain/i.test(e.message || ''))){
+      try { await prov.request({ method:'wallet_addEthereumChain', params:[PULSECHAIN] }); return true; } catch(_){} }
+    return false; }
+}
+async function signInWallet(id){
   if (!online.sb) return showAuth();
-  const { email, password } = authVals();
+  const w = walletChoices().find(x => x.id === id); if (!w) return authMsg('That wallet is no longer available. Reload and try again.');
+  const carry = online.user && online.user.is_anonymous ? online.user.id : null;
   try {
-    let res;
-    if (kind === 'guest') res = await online.sb.auth.signInAnonymously();
-    else {
-      if (!email || password.length < 6) return authMsg('Enter an email and a password of at least 6 characters.');
-      res = kind === 'up' ? await online.sb.auth.signUp({ email, password }) : await online.sb.auth.signInWithPassword({ email, password });
+    authMsg('✓ Check your wallet…');
+    const prov = w.id === 'walletconnect' ? await walletConnectProvider() : w.provider;
+    await prov.request({ method:'eth_requestAccounts' });
+    await switchChain(prov, '0x171');
+    const statement = `Sign in to Validator Tycoon. Free, no transaction. I accept the Terms at ${location.origin}/terms.html`;
+    let res = await online.sb.auth.signInWithWeb3({ chain:'ethereum', wallet:prov, statement });
+    // If the auth server only accepts Ethereum's chain ID in the sign-in message, sign that instead (still free, nothing is sent).
+    if (res.error && /chain/i.test(res.error.message || '') && await switchChain(prov, '0x1')){
+      res = await online.sb.auth.signInWithWeb3({ chain:'ethereum', wallet:prov, statement });
+      switchChain(prov, '0x171');
     }
     if (res.error){ const m = res.error.message || 'Sign-in failed';
-      return authMsg(/anonymous/i.test(m) ? 'Guest play is switched off on the server. Use an email for now.' : m); }
-    if (kind === 'up' && !res.data.session) return authMsg('✓ Account created. Check your email to confirm it, then sign in.');
+      return authMsg(/disabled|not enabled|provider/i.test(m) ? 'Wallet sign-in is not switched on yet on the game server.' : m); }
+    online.user = res.data.user || (res.data.session && res.data.session.user);
+    online.carry = carry;
+    try { localStorage.removeItem('vt_offline'); } catch(e){}
+    ui.authOpen = false; closeModal(); await afterSignIn();
+  } catch (e) { authMsg(e && e.code === 4001 ? 'You cancelled in your wallet.' : (e.message || String(e))); }
+}
+async function authDo(kind){
+  if (!online.sb) return showAuth();
+  try {
+    const res = await online.sb.auth.signInAnonymously();
+    if (res.error){ const m = res.error.message || 'Sign-in failed';
+      return authMsg(/anonymous/i.test(m) ? 'Guest play is switched off on the server. Connect a wallet instead.' : m); }
     online.user = res.data.user || (res.data.session && res.data.session.user);
     try { localStorage.removeItem('vt_offline'); } catch(e){}
-    closeModal(); await afterSignIn();
+    ui.authOpen = false; closeModal(); await afterSignIn();
   } catch (e) { authMsg(e.message || String(e)); }
 }
 // Signed-in players only deal with real players: return any stakes with computer-run companies and leave computer-run guilds.
@@ -908,7 +980,7 @@ async function afterSignIn(){
     const { data, error } = await withTimeout(online.sb.from('saves').select('state').eq('player_id', me).maybeSingle(), 15000);
     if (error) throw error;
     const cloud = data && data.state;
-    const localIsMine = !S.owner || S.owner === me;
+    const localIsMine = !S.owner || S.owner === me || (online.carry && S.owner === online.carry);
     if (cloud && (!localIsMine || (cloud.lastSave || 0) > (S.lastSave || 0) || (cloud.lifetime || 0) > (S.lifetime || 0) * 1.05)){
       S = Object.assign(freshState(), cloud);
       S.nodes.forEach(n => { n.assigned = false; if (n.status === 'repairing') n.status = 'broken'; });
@@ -921,7 +993,9 @@ async function afterSignIn(){
     online.status = 'online';
     await cloudSync(true);
     clearInterval(online.timer); online.timer = setInterval(() => cloudSync(), CLOUD.syncEvery);
-    log(`☁️ Online as ${online.user.is_anonymous ? 'guest' : online.user.email}.`, 'good');
+    online.carry = null;
+    log(`☁️ Online as ${online.user.is_anonymous ? 'guest' : shortAddr(walletOfUser(online.user)) || 'player'}.`, 'good');
+    realLoad(true);
   } catch (e) { online.status = 'error'; online.err = e.message || String(e); log('☁️ Could not reach the game server. Playing offline for now.', 'warn'); }
   render(true);
 }
@@ -964,6 +1038,7 @@ async function cloudSync(force = false){
     if (mem.data){ S.guildId = 'rg_' + mem.data.guild_id; S.guildStake = +mem.data.stake; online.myPoolServer = +mem.data.stake; }
     else if (isRealGuild(S.guildId)){ S.guildId = null; S.guildStake = 0; online.myPoolServer = 0; }
     online.status = 'online'; online.err = '';
+    realLoad();
   } catch (e) { online.status = 'error'; online.err = e.message || String(e); }
   finally { online.busy = false; globe.refresh(); render(); }
 }
@@ -975,10 +1050,121 @@ async function cloudCall(label, fn){
 }
 
 /* =========================================================
+   REAL PULSECHAIN VALIDATORS — link the validators you really run,
+   Real Backer tiers, guild validator projects (coordination only;
+   the game never holds PLS).
+   ========================================================= */
+const realEmpty = () => ({ list:[], ops:new Map(), board:[], projects:[], pledges:[], busy:false, msg:'', loadedAt:0, callAt:0 });
+const real = realEmpty();
+const BACKER_TIERS = [['Bronze', 1e6], ['Silver', 8e6], ['Gold', 32e6], ['Diamond', 320e6]];
+const gweiToPls = g => (+g || 0) / 1e9;
+const realActive = () => real.list.filter(v => /^active/.test(v.status));
+const realHealthy = () => realActive().filter(v => v.healthy && !v.slashed);
+function coopLive(){ return real.projects.some(p => p.live_validators > 0 && (p.operator_id === uid() || real.pledges.some(x => x.project_id === p.id && x.player_id === uid()))); }
+function backedPls(){
+  const own = realActive().reduce((a, v) => a + gweiToPls(v.effective_gwei), 0);
+  const coop = real.pledges.filter(x => x.player_id === uid() && real.projects.some(p => p.id === x.project_id && p.live_validators > 0)).reduce((a, x) => a + (+x.amount_pls || 0), 0);
+  return own + coop;
+}
+function backerTier(){ const b = backedPls(); let t = null; for (const x of BACKER_TIERS) if (b >= x[1]) t = x[0]; return t; }
+// In-game perk for keeping real validators healthy: +2% rewards each (max +10%), +2% for a live guild co-op validator.
+function realMult(){ if (!online.user) return 1; return 1 + Math.min(0.10, 0.02 * realHealthy().length) + (coopLive() ? 0.02 : 0); }
+async function realCall(action, extra = {}){
+  if (!online.sb || !isWalletUser()) return log('Connect a wallet to link real validators.', 'warn');
+  if (real.busy) return; real.busy = true; real.msg = ''; render(true);
+  try {
+    const { data, error } = await withTimeout(online.sb.functions.invoke('validators', { body:{ action, ...extra } }), 45000);
+    let d = data;
+    if (error){ try { d = await error.context.json(); } catch(_){ d = { ok:false, reason:error.message }; } }
+    if (!d || d.ok === false){ real.msg = (d && d.reason) || 'Could not reach PulseChain.'; log('⛓️ ' + real.msg, 'bad'); }
+    else { real.list = d.validators || []; real.msg = (d.messages || []).join(' '); if (real.msg) log('⛓️ ' + real.msg, 'good'); real.callAt = Date.now(); realBadges(); }
+  } catch (e) { real.msg = e.message || String(e); log('⛓️ ' + real.msg, 'bad'); }
+  finally { real.busy = false; realLoad(true); }
+}
+async function realLoad(force = false){
+  if (!online.sb || !online.user || (!force && Date.now() - real.loadedAt < 60_000)) return;
+  real.loadedAt = Date.now();
+  try {
+    const sb = online.sb, g = guild(S.guildId), gid = g && g.real ? g.uuid : null;
+    const [ops, mine, projs] = await Promise.all([
+      sb.from('real_operators').select('id,company_name,active_validators,healthy_validators,staked_pls').order('staked_pls', { ascending:false }).limit(25),
+      sb.from('real_validators').select('validator_index,status,slashed,balance_gwei,effective_gwei,earned_gwei,healthy,project_id,checked_at').eq('player_id', uid()),
+      gid ? sb.from('guild_project_status').select('*').eq('guild_id', gid) : Promise.resolve({ data:[] }),
+    ]);
+    real.board = ops.data || []; real.ops = new Map(real.board.map(o => [o.id, o]));
+    if (!real.busy && mine.data) real.list = mine.data.sort((a, b) => a.validator_index - b.validator_index);
+    real.projects = projs.data || [];
+    real.pledges = real.projects.length ? ((await sb.from('guild_pledges').select('project_id,player_id,amount_pls').in('project_id', real.projects.map(p => p.id))).data || []) : [];
+    realBadges();
+    // ask PulseChain for fresh balances now and then (the server rechecks at most every 6 minutes)
+    if (isWalletUser() && real.list.length && Date.now() - real.callAt > 15 * 60_000 && !real.busy){ real.callAt = Date.now(); realCall('refresh'); }
+  } catch (e) { /* the board is optional; keep playing */ }
+  globe.refresh(); render();
+}
+function realBadges(){
+  if (realActive().length) award('mainnet');
+  if (backedPls() >= 32e6) award('backer');
+  if (coopLive()) award('coop');
+}
+const realOp = c => c && c.real && real.ops.get(c.uid);
+function showRealGuide(){
+  showModal(`<h2>Run a real PulseChain validator</h2>
+    <p>Real validators keep PulseChain running. Each one needs <b>32M PLS</b> and a computer that stays online. Here is the path most operators take:</p>
+    <p><b>1. A machine.</b> A dedicated PC or a cloud server with a fast SSD (2TB+), 32GB+ RAM and stable internet. Open-source setup scripts automate most of it.</p>
+    <p><b>2. Keys.</b> Generate validator keys with the official staking deposit tool, choosing <b>pulsechain</b> as the chain and <b>your own wallet as the withdrawal address</b>. Keep the mnemonic offline.</p>
+    <p><b>3. Deposit.</b> Use the official PulseChain launchpad to deposit 32M PLS per validator into the deposit contract (0x3693…3693). Double-check every address.</p>
+    <p><b>4. Run and watch.</b> Keep the execution and consensus clients synced and online. Offline validators slowly lose PLS; double-signing gets slashed.</p>
+    <p><b>5. Link it here.</b> Sign in with the same wallet you set as the withdrawal address, then paste your validator number in the Company tab. The game checks PulseChain and shows your validator's real status on your company.</p>
+    <p>Not ready for 32M alone? Start a <b>guild validator project</b> in the Network tab and coordinate with your guild.</p>
+    <p class="note">This is general information, not financial advice. Staking has risks, including slashing and losing funds to mistakes or scams. Only use official tools and never share your mnemonic.</p>
+    <div class="btns"><a class="btn" href="https://launchpad.pulsechain.com" target="_blank" rel="noopener">PulseChain launchpad</a><a class="btn ghost" href="https://gitlab.com/pulsechaincom/staking-deposit-cli" target="_blank" rel="noopener">Deposit tool</a><a class="btn ghost" href="https://github.com/rhmaxdotorg/pulsechain-validator" target="_blank" rel="noopener">Setup scripts</a><button class="btn ghost" data-act="closeModal">Close</button></div>`);
+}
+function mainnetSection(){
+  if (!online.user) return '';
+  if (!isWalletUser()) return `<div class="sec"><h3>⛓️ PulseChain mainnet</h3><div class="card"><div class="desc">Connect a wallet to link the real PulseChain validators you run and earn Real Backer perks.</div><div class="btns"><button class="btn sm" data-act="authOpen">Connect wallet</button><button class="btn sm ghost" data-act="realGuide">How to run a real validator</button></div></div></div>`;
+  const act = realActive(), healthy = realHealthy().length, tier = backerTier(), backed = backedPls();
+  const rows = real.list.map(v => { const ok = /^active/.test(v.status) && v.healthy && !v.slashed;
+    const st = v.slashed ? 'SLASHED' : /^active/.test(v.status) ? (v.healthy ? 'LIVE' : 'MISSING') : v.status.replace(/_/g, ' ').toUpperCase();
+    return `<div class="row"><div><div class="name">#${v.validator_index} <span class="tag ${ok?'good':'bad'}">${esc(st)}</span>${v.project_id?' <span class="tag">GUILD</span>':''}</div>
+      <div class="desc">${fmt(gweiToPls(v.balance_gwei))} PLS · earned ${fmt(gweiToPls(v.earned_gwei))} since linking</div></div>
+      <button class="btn sm ghost" data-act="realUnlink" data-arg="${v.validator_index}">Unlink</button></div>`; }).join('');
+  const board = real.board.slice(0, 10).map((o, i) => `<div class="lb ${o.id===uid()?'me':''}"><span>#${i+1} ⛓️ ${esc(o.company_name)}</span><span class="mono">${o.healthy_validators}/${o.active_validators} live · ${fmt(+o.staked_pls)} PLS</span></div>`).join('');
+  return `<div class="sec"><h3>⛓️ PulseChain mainnet</h3><div class="card">
+    <div class="kv"><span>Real Backer tier</span><span>${tier ? `<b>${tier}</b> · ${fmt(backed)} PLS` : 'None yet'}</span></div>
+    <div class="kv"><span>Real validators live</span><span>${healthy} / ${act.length}</span></div>
+    <div class="kv"><span>Mainnet reward bonus</span><span>×${realMult().toFixed(2)}</span></div>
+    ${rows || '<div class="desc" style="margin:6px 0">No real validators linked yet.</div>'}
+    <input type="text" id="rv_ids" data-input="rv" placeholder="Validator numbers, e.g. 123456, 123457" style="margin-top:6px">
+    <div class="btns"><button class="btn sm" data-act="realLink" ${real.busy?'disabled':''}>Link</button><button class="btn sm ghost" data-act="realFind" ${real.busy?'disabled':''}>Find mine</button><button class="btn sm ghost" data-act="realRefresh" ${real.busy||!real.list.length?'disabled':''}>Refresh</button><button class="btn sm ghost" data-act="realGuide">How to run one</button></div>
+    ${real.busy ? '<div class="desc">Checking PulseChain…</div>' : real.msg ? `<div class="desc">${esc(real.msg)}</div>` : ''}
+    <div class="note" style="margin-top:6px">Only validators whose withdrawal address is your wallet can be linked. Linking is public (validators are public on PulseChain anyway); your wallet address stays private. Each healthy validator gives +2% in-game rewards (max +10%). The game never touches your PLS.</div>
+  </div></div>
+  ${board ? `<div class="sec"><h3>Real operators</h3><div class="card">${board}</div><div class="note">Players running real PulseChain validators, ranked by PLS staked.</div></div>` : ''}`;
+}
+function projectsSection(g){
+  if (!g || !g.real || !online.user) return '';
+  const me = uid(), member = S.guildId === g.id;
+  const cards = real.projects.map(p => {
+    const pledged = +p.pledged_pls || 0, target = +p.target_pls || 32e6, mine = real.pledges.find(x => x.project_id === p.id && x.player_id === me);
+    const live = p.live_validators > 0, op = p.operator_id === me;
+    return `<div class="card" style="margin-top:6px"><div class="row"><div class="name">🧱 ${esc(p.name)}</div>${live ? `<span class="tag ${p.all_healthy?'good':'bad'}">${p.all_healthy?'LIVE':'CHECK'} · ${p.live_validators}</span>` : '<span class="tag">PLEDGING</span>'}</div>
+      <div class="desc">Operator: ${op ? 'you' : esc(p.operator_name || '—')} · ${p.pledgers} pledger${p.pledgers==1?'':'s'}</div>
+      <div class="bar"><i style="width:${Math.min(100, pledged/target*100)}%"></i></div><div class="desc">${fmt(pledged)} of ${fmt(target)} PLS pledged</div>
+      ${mine ? `<div class="kv"><span>Your pledge</span><span>${fmt(+mine.amount_pls)} PLS</span></div>` : ''}
+      ${member ? `<div class="btns"><input type="number" min="0.1" step="0.1" id="pp_${p.id}" placeholder="M PLS" style="width:90px"><button class="btn sm" data-act="projPledge" data-arg="${p.id}">${mine?'Update pledge':'Pledge'}</button>${mine?`<button class="btn sm ghost" data-act="projUnpledge" data-arg="${p.id}">Withdraw pledge</button>`:''}</div>` : ''}
+      ${op && isWalletUser() ? `<div class="btns"><input type="text" id="pl_${p.id}" placeholder="Validator number" style="width:140px"><button class="btn sm ghost" data-act="projLink" data-arg="${p.id}">Link validator</button><button class="btn sm danger" data-act="projClose" data-arg="${p.id}">Close project</button></div>` : ''}
+    </div>`; }).join('');
+  return `<div class="sec"><h3>Guild validator projects (real PLS)</h3>
+    ${cards || '<div class="desc">No projects yet. Pool real PLS with guild members to run a real validator together.</div>'}
+    ${member ? `<div class="btns" style="margin-top:6px"><input type="text" id="pj_name" maxlength="32" placeholder="Project name" style="width:170px"><button class="btn sm" data-act="projNew">Start a project (you operate it)</button></div>` : ''}
+    <div class="note" style="margin-top:6px">A coordination board only: pledges are promises, nothing is sent and the game never holds PLS. Agree how rewards are shared before anyone sends funds, and prefer a multisig wallet you all control as the withdrawal address. Only deal with people you trust.</div></div>`;
+}
+
+/* =========================================================
    UI RENDER
    ========================================================= */
 function leaderboard(){
-  const list = NET.companies().map(c => ({ name:(c.real ? '👤 ' : '') + c.name, nw:c.nw, cc:c.cc }));
+  const list = NET.companies().map(c => ({ name:(realOp(c) ? '⛓️ ' : c.real ? '👤 ' : '') + c.name, nw:c.nw, cc:c.cc }));
   list.push({ name:S.company, nw:netWorth(), me:true });
   return list.sort((a,b)=>b.nw-a.nw);
 }
@@ -988,13 +1174,14 @@ function chips(){
   if (active('outage')) c.push(['bad', `⚡ Grid outage — running on ${rt.powerSrc==='ups'?'UPS':rt.powerSrc==='gen'?'generator':'NOTHING'}`, left('outage')]);
   if (active('fibre')) c.push(['bad', `✂️ Fiber cut — ${rt.net==='sat'?'on satellite':rt.net==='4g'?'on 4G backup':'OFFLINE'}`, left('fibre')]);
   if (active('mania')) c.push(['good', '🐸 Meme-coin mania: fees ×3', left('mania')]);
+  if (online.user && realActive().length){ const h = realHealthy().length, n = realActive().length; c.push([h === n ? 'good' : 'bad', `⛓️ Mainnet: ${h}/${n} real validator${n===1?'':'s'} live`, '∞']); }
   if (active('bear')) c.push(['', '🐻 Bear market: nodes 50% off', left('bear')]);
   if (active('heat')) c.push(['', '🔥 Heatwave: cooling −30%', left('heat')]);
   if (active('ddos')) c.push([S.fac.ddos?'good':'bad', S.fac.ddos ? '🛡️ DDoS attack being filtered' : '🌊 DDoS attack: validators missing blocks', left('ddos')]);
   if (S.ev.outage && S.generator && !S.fac.ats && rt.powerSrc !== 'gen' && S.block < S.ev.outage.start + 5) c.push(['bad', '⏳ Generator starting up…', S.ev.outage.start + 5 - S.block]);
   const farmsDown = S.farms.filter(f => !farmUp(f)); if (farmsDown.length) c.push(['bad', `🛰️ Farm offline: ${farmsDown.map(f=>f.city).join(', ')}`, Math.max(...farmsDown.map(f => Math.max(f.down||0, (S.world.cityDown||{})[f.city]||0) - S.block))]);
   if (S.ev.whale) c.push(['', `🐋 Whale trial — downtime ${(100*S.ev.whale.down/Math.max(1,S.ev.whale.total)).toFixed(1)}%`, S.ev.whale.until - S.block]);
-  let html = c.map(([cls,t,l]) => `<div class="chip ${cls}"><span>${t}</span><span class="t">${l}b</span></div>`).join('');
+  let html = c.map(([cls,t,l]) => `<div class="chip ${cls}"><span>${t}</span>${l === '∞' ? '' : `<span class="t">${l}b</span>`}</div>`).join('');
   if (S.ev.upgrade || S.outOfSync){
     const cst = S.nodes.length*50_000;
     html += `<div class="chip bad"><span>${S.outOfSync?'⛔ Out of sync!':'🛠️ Upgrade due in '+(S.ev.upgrade.deadline-S.block)+'b'}</span><button class="btn sm" data-act="patch" ${S.coins<cst?'disabled':''}>Patch ${fmt(cst)}</button></div>`;
@@ -1125,20 +1312,21 @@ function tabStake(){
     <div class="kv"><span>Costs this block</span><span>${fmt(rt.cost)}</span></div>
     <div class="kv"><span>Average net / block</span><span>${fmt(S.incomeEMA)}</span></div>
     <div class="kv"><span>Blocks proposed</span><span>${S.stats.proposed.toLocaleString()}</span></div>
-    <div class="kv"><span>Reward multiplier</span><span>×${(forkMult()*(liveBonus>0?1.1:1)).toFixed(2)}</span></div>
+    <div class="kv"><span>Reward multiplier</span><span>×${(forkMult()*(liveBonus>0?1.1:1)*realMult()).toFixed(2)}</span></div>
   </div></div>`;
 }
 function accountSection(){
   let body;
   if (online.user){
-    const guest = online.user.is_anonymous;
-    body = `<div class="kv"><span>Signed in as</span><span>${guest ? 'Guest' : esc(online.user.email || '')}</span></div>
+    const guest = online.user.is_anonymous, wa = walletOfUser(online.user);
+    body = `<div class="kv"><span>Signed in as</span><span>${guest ? 'Guest' : wa ? '🔐 ' + esc(shortAddr(wa)) : 'Player'}</span></div>
       <div class="kv"><span>Player ID</span><span style="font-size:11px">${esc(online.user.id.slice(0,8))}…</span></div>
       <div class="kv"><span>Cloud</span><span style="color:${online.status==='online'?'var(--good)':'var(--bad)'}">${online.status === 'online' ? 'Synced every 30s' : esc(online.err || online.status)}</span></div>
-      ${guest ? `<div class="desc" style="margin-top:6px">Add an email so you never lose this company:</div><input type="email" id="lk_email" data-input="lk" placeholder="Email" style="margin-top:4px"><input type="password" id="lk_pass" data-input="lk" placeholder="Password (6+)" style="margin-top:4px"><div class="btns"><button class="btn sm" data-act="authLink">Save account</button></div>` : ''}
+      ${guest ? `<div class="desc" style="margin-top:6px">Connect a wallet so you never lose this company. Your progress comes with you.</div><div class="btns"><button class="btn sm" data-act="authOpen">Connect wallet</button></div>` : ''}
+      ${wa ? `<div class="note" style="margin-top:4px">Your wallet address is private: other players only see your company.</div>` : ''}
       <div class="btns"><button class="btn sm ghost" data-act="syncNow">Sync now</button><button class="btn sm ghost" data-act="authOut">Sign out</button></div>`;
   } else if (online.sb){
-    body = `<div class="desc">Sign in to save in the cloud and play with real players.</div><div class="btns"><button class="btn sm" data-act="authOpen">Sign in / create account</button></div>`;
+    body = `<div class="desc">Connect a PulseChain wallet to save in the cloud and play with real players.</div><div class="btns"><button class="btn sm" data-act="authOpen">Connect wallet</button></div>`;
   } else {
     body = `<div class="desc">${online.status === 'starting' ? 'Connecting…' : 'Online play isn\'t available in this copy. Your progress saves in this browser.'}</div>`;
   }
@@ -1149,7 +1337,7 @@ function tabCompany(){
   const lb = full.map((r,i) => ({...r, i})).filter(r => r.i < 10 || r.me).map(r => `<div class="lb ${r.me?'me':''}"><span>#${r.i+1} ${r.cc?FLAGS(r.cc)+' ':''}${esc(r.name)}</span><span class="mono">${fmt(r.nw)}</span></div>`).join('');
   const gl = NET.guilds().slice().sort((a,b)=>guildTotal(b)-guildTotal(a)).slice(0,8).map((g,i)=>`<div class="lb ${S.guildId===g.id?'me':''}"><span>#${i+1} <span style="color:#${g.color.toString(16).padStart(6,'0')}">●</span> ${esc(g.name)}</span><span class="mono">${guildVals(g)} val · ${fmt(guildTotal(g))}</span></div>`).join('');
   const g = forkGain();
-  return `${accountSection()}<div class="sec"><h3>Company name</h3><input type="text" maxlength="28" value="${esc(S.company)}" data-input="name"></div>
+  return `${accountSection()}${mainnetSection()}<div class="sec"><h3>Company name</h3><input type="text" maxlength="28" value="${esc(S.company)}" data-input="name"></div>
   <div class="sec"><h3>Your CEO (sits at the desk)</h3><div class="btns">${scene3.CEO_CAST.map(k=>`<button class="btn sm ${S.ceo===k?'':'ghost'}" data-act="ceo" data-arg="${k}">${scene3.NAMES[k]}</button>`).join('')}</div></div>
   <div class="sec"><h3>Season ${S.season} leaderboard · ends in ${S.seasonEnd - S.block} blocks</h3><div class="card">${lb}</div><div class="note">You're #${myRank+1} of ${full.length}. Ranked by net worth. ${online.user ? 'Everyone here is a real player.' : 'Other companies are computer-run. Sign in to compete with real players.'}</div></div>
   <div class="sec"><h3>Guild leaderboard</h3><div class="card">${gl}</div></div>
@@ -1211,7 +1399,7 @@ function tabNetwork(){
   if (c) h += `<div class="sec"><h3>Selected company</h3>${companyCard(c)}</div>`;
   const dels = Object.entries(S.dels);
   h += `<div class="sec"><h3>Your stake with other companies · ${fmt(delegatedTotal())}</h3>${dels.length ? `<div class="card">${dels.map(([id,amt])=>{ const x = company(id); return x ? `<div class="kv" style="cursor:pointer" data-act="sel" data-arg="${id}"><span>${esc(x.name)} ${FLAGS(x.cc)} ${coOnline(x)?'':'<span class="tag bad">OFF</span>'}</span><span>${fmt(amt)}</span></div>` : ''; }).join('')}</div>` : '<div class="note">Not staking with anyone yet. Pick a company below or on the globe. It\'s a way to earn before you can afford your own nodes, though running your own validators always pays more.</div>'}</div>`;
-  if (S.guildId && guild(S.guildId)) h += `<div class="sec"><h3>Your guild</h3>${guildCard(guild(S.guildId))}</div>`;
+  if (S.guildId && guild(S.guildId)) h += `<div class="sec"><h3>Your guild</h3>${guildCard(guild(S.guildId))}</div>${projectsSection(guild(S.guildId))}`;
   else {
     const gs = NET.guilds().slice().sort((a,b)=>guildTotal(b)-guildTotal(a));
     h += `<div class="sec"><h3>Join a guild</h3>${gs.length ? '' : '<div class="note" style="margin-bottom:8px">No guilds yet. Found the first one and other players can join it.</div>'}${gs.map(g=>`<div class="card"><div class="row"><div><div class="name"><span style="color:#${g.color.toString(16).padStart(6,'0')}">●</span> ${esc(g.name)}</div><div class="desc">${guildMembers(g).length} members · ${guildVals(g)} validators · ${(g.fee*100).toFixed(0)}% fee</div></div><button class="btn sm" data-act="joinGuild" data-arg="${g.id}">Join</button></div></div>`).join('')}
@@ -1648,6 +1836,7 @@ const scene3 = (() => {
     panel(0, 'VALIDATORS', `${rt.k}/${totalSlots()}`, '#3cf29a');
     panel(170, 'ROOM TEMP', `${rt.temp.toFixed(0)}°C`, rt.heatRatio > 1 ? '#ff5468' : '#2bd4ff');
     panel(340, 'POWER', { grid:'GRID', ups:'UPS', gen:'GEN', none:'DOWN' }[rt.powerSrc], rt.powered ? '#ffc83d' : '#ff5468');
+    if (online.user && realActive().length){ g.fillStyle = '#ffd166'; g.font = 'bold 15px monospace'; g.fillText(`MAINNET ${realHealthy().length}/${realActive().length} LIVE`, 354, 112); }
     const hist = P.hist || [], mx = Math.max(1, ...hist);
     [[0,'#3cf29a'],[170,'#2bd4ff'],[340,'#ffc83d']].forEach(([x, col], k) => { g.strokeStyle = col; g.lineWidth = 2; g.beginPath();
       hist.forEach((v, i) => { const yy = 180 - (v/mx)*70*(0.6 + 0.2*k) - Math.sin(i*0.7 + k)*4; i ? g.lineTo(x + 14 + i*3.6, yy) : g.moveTo(x + 14, yy); }); g.stroke(); });
@@ -2290,7 +2479,7 @@ const globe = (() => {
       live.add(c.id);
       const h = 0.03 + Math.min(0.22, Math.log10(1 + coVals(c)) * 0.08);
       let p = pins.get(c.id);
-      const col = c.guild ? (guild(c.guild)?.color ?? 0x9aa4ff) : c.real ? 0xffffff : 0x9aa4ff;
+      const col = realOp(c) ? 0xffd166 : c.guild ? (guild(c.guild)?.color ?? 0x9aa4ff) : c.real ? 0xffffff : 0x9aa4ff;
       if (!p){ p = makePin(c.id, c.lat, c.lon, col, h); p.c = c; pins.set(c.id, p); }
       p.spike.scale.y = h; p.head.position.y = h; p.hit.position.y = h;
       const sel = ui.sel === c.id, staked = !!S.dels[c.id];

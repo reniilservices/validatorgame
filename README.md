@@ -46,7 +46,11 @@ A 3D isometric idle/tycoon game about running a staking company on a PulseChain-
 
 The game connects to the Supabase project `ieiluyjwhpjzofvasyck` (URL and publishable key are in `CLOUD` at the top of the online section of `index.html`; the publishable key is meant to be public).
 
-- **Sign-in:** email + password, or **Play as guest** (anonymous). Guests can attach an email later in the Company tab. **Play offline** skips the server entirely.
+- **Sign-in: wallet only (no email).** Sign-In with Ethereum (EIP-4361) via Supabase `signInWithWeb3`, with installed wallets found through EIP-6963 (Internet Money, Rabby, MetaMask…). The wallet is switched to PulseChain (369) and signs a free message; if the auth server only accepts chain ID 1 in the message, the game signs that instead. Optional WalletConnect QR for phone wallets: set `CLOUD.wcProjectId`. **Play as guest** (anonymous) and **Play offline** still work; a guest who connects a wallet keeps their company.
+- **Real PulseChain validators:** wallet players paste validator numbers (or press *Find mine*) in the Company tab. The `validators` Edge Function checks the beacon chain (PublicNode, then g4mm4) and only links validators whose withdrawal credentials point at the signed-in wallet. It rechecks balance and status at most every 6 minutes, treats PulseChain's reward sweeps as payouts (not downtime) and tracks rewards since linking. Linked validators give +2% in-game rewards each while healthy (max +10%), a ⛓️ on the leaderboard, gold globe pins, a HUD chip, a line on the NOC screen and the *Mainnet Operator* badge.
+- **Real Backer tiers (provider-neutral):** Bronze 1M, Silver 8M, Gold 32M, Diamond 320M PLS, counted from your own linked validators plus pledges to live guild validator projects. No staking provider is promoted.
+- **Guild validator projects:** in a real guild, members start a project (the starter is its operator), pledge PLS amounts (non-binding notes), and the operator links the real validator once it runs. A coordination board only: the game never holds or moves PLS. Live projects give pledgers +2% in-game rewards and the *Co-op Validator* badge.
+- **Privacy:** wallet addresses live in `player_wallets` (each player can only read their own row) and are never shown to other players. Linked validators and pledges are public, like the chain itself.
 - **Cloud saves:** every 30 seconds and when the tab is hidden, via `submit_save` (rejects impossible progress). On sign-in the newer of cloud/local save wins; another account's local save is never uploaded.
 - **Signed in = real players only:** the computer-run companies and guilds are hidden online (stakes with them are returned via unbonding). Offline play keeps the computer-run world.
 - **Real players:** your company profile (name, chosen city, validators, reputation, commission, online) is published via `update_company`. Real players appear on the globe (white or guild-coloured pins), in the company list and on the leaderboard with 👤, alongside the computer-run companies.
@@ -55,8 +59,13 @@ The game connects to the Supabase project `ieiluyjwhpjzofvasyck` (URL and publis
 - **Offline fallback:** if Supabase or the library CDN can't be reached (e.g. the claude.ai preview), the game runs exactly as before with local saves.
 
 **One-time Supabase settings (dashboard):**
-1. Authentication → Sign In / Providers → enable **Allow anonymous sign-ins** (for guest play).
-2. Authentication → URL Configuration → set **Site URL** to the live Vercel address, so email confirmation links open the game.
+1. Authentication → Sign In / Providers → **Web3 Wallet** → enable **Ethereum**.
+2. Authentication → Sign In / Providers → **Email**: turn off (wallet-only sign-in). Keep **Allow anonymous sign-ins** on for guest play.
+3. Authentication → URL Configuration → **Site URL** = the live Vercel address (the wallet sign-in message is bound to this domain).
+
+Database migrations: `supabase/schema.sql`, `multiplayer.sql`, `003_public_stats_invoker_views.sql`, `004_wallets_real_validators.sql`. Edge Function: `supabase/functions/validators` (deployed with JWT verification off because it checks the user itself).
+
+**Community staking pool (draft):** `contracts/TycoonStakingPool.sol` + `docs/STAKING_POOL.md`: any-amount pooling into real validators at a 3% reward fee (5% cap). Unaudited, refuses to deploy on mainnet; simulation in `contracts/test/pool-sim.mjs`.
 
 **Deploy:** Vercel → Add New → Project → import `reniilservices/validatorgame`, framework *Other*, no build command. Every push to `main` redeploys.
 
